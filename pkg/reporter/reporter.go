@@ -3,7 +3,7 @@ package reporter
 import (
 	"context"
 	"io"
-	"github.com/policyguard/policyguard/pkg/types"
+	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
 // Reporter defines the interface for generating reports

@@ -2,7 +2,7 @@ package parser
 
 import (
 	"context"
-	"github.com/policyguard/policyguard/pkg/types"
+	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
 // Parser defines the interface for parsing IaC files

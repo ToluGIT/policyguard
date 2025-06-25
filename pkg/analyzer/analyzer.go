@@ -2,11 +2,11 @@ package analyzer
 
 import (
 	"context"
-	"github.com/policyguard/policyguard/pkg/parser"
-	"github.com/policyguard/policyguard/pkg/policy"
-	"github.com/policyguard/policyguard/pkg/remediation"
-	"github.com/policyguard/policyguard/pkg/reporter"
-	"github.com/policyguard/policyguard/pkg/types"
+	"github.com/ToluGIT/policyguard/pkg/parser"
+	"github.com/ToluGIT/policyguard/pkg/policy"
+	"github.com/ToluGIT/policyguard/pkg/remediation"
+	"github.com/ToluGIT/policyguard/pkg/reporter"
+	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
 // Analyzer coordinates the analysis workflow

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/policyguard/policyguard/pkg/types"
+	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
 // BasicSuggester provides basic remediation suggestions

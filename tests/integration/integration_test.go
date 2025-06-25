@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/policyguard/policyguard/pkg/analyzer"
-	"github.com/policyguard/policyguard/pkg/parser/terraform"
-	"github.com/policyguard/policyguard/pkg/policy/opa"
-	"github.com/policyguard/policyguard/pkg/reporter/human"
-	jsonreporter "github.com/policyguard/policyguard/pkg/reporter/json"
-	"github.com/policyguard/policyguard/pkg/types"
+	"github.com/ToluGIT/policyguard/pkg/analyzer"
+	"github.com/ToluGIT/policyguard/pkg/parser/terraform"
+	"github.com/ToluGIT/policyguard/pkg/policy/opa"
+	"github.com/ToluGIT/policyguard/pkg/reporter/human"
+	jsonreporter "github.com/ToluGIT/policyguard/pkg/reporter/json"
+	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
 func TestMain(m *testing.M) {

@@ -21,7 +21,7 @@ This guide provides security best practices for using PolicyGuard and writing se
    sha256sum policyguard
    
    # Use official sources
-   go install github.com/policyguard/policyguard/cmd/policyguard@latest
+   go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
    ```
 
 2. **Secure Storage**:

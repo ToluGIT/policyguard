@@ -45,7 +45,7 @@ By participating in this project, you agree to abide by our Code of Conduct:
 
 3. **Add upstream remote**
    ```bash
-   git remote add upstream https://github.com/policyguard/policyguard.git
+   git remote add upstream https://github.com/ToluGIT/policyguard.git
    ```
 
 4. **Install dependencies**
@@ -366,7 +366,7 @@ POLICYGUARD_LOG_LEVEL=debug go run cmd/policyguard/main.go scan examples/terrafo
 
 ```go
 // Add debug logging
-import "github.com/policyguard/policyguard/pkg/logger"
+import "github.com/ToluGIT/policyguard/pkg/logger"
 
 logger.Debug("Processing resource: %+v", resource)
 ```

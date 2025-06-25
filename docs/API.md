@@ -29,12 +29,12 @@ PolicyGuard provides a Go API that can be integrated into other tools and servic
 
 ```go
 import (
-    "github.com/policyguard/policyguard/pkg/analyzer"
-    "github.com/policyguard/policyguard/pkg/parser/terraform"
-    "github.com/policyguard/policyguard/pkg/policy/opa"
-    "github.com/policyguard/policyguard/pkg/reporter/human"
-    "github.com/policyguard/policyguard/pkg/reporter/json"
-    "github.com/policyguard/policyguard/pkg/types"
+    "github.com/ToluGIT/policyguard/pkg/analyzer"
+    "github.com/ToluGIT/policyguard/pkg/parser/terraform"
+    "github.com/ToluGIT/policyguard/pkg/policy/opa"
+    "github.com/ToluGIT/policyguard/pkg/reporter/human"
+    "github.com/ToluGIT/policyguard/pkg/reporter/json"
+    "github.com/ToluGIT/policyguard/pkg/types"
 )
 ```
 
@@ -329,10 +329,10 @@ import (
     "log"
     "os"
     
-    "github.com/policyguard/policyguard/pkg/analyzer"
-    "github.com/policyguard/policyguard/pkg/parser/terraform"
-    "github.com/policyguard/policyguard/pkg/policy/opa"
-    "github.com/policyguard/policyguard/pkg/reporter/human"
+    "github.com/ToluGIT/policyguard/pkg/analyzer"
+    "github.com/ToluGIT/policyguard/pkg/parser/terraform"
+    "github.com/ToluGIT/policyguard/pkg/policy/opa"
+    "github.com/ToluGIT/policyguard/pkg/reporter/human"
 )
 
 func main() {
@@ -380,9 +380,9 @@ import (
     "context"
     "fmt"
     
-    "github.com/policyguard/policyguard/pkg/parser/terraform"
-    "github.com/policyguard/policyguard/pkg/policy/opa"
-    "github.com/policyguard/policyguard/pkg/types"
+    "github.com/ToluGIT/policyguard/pkg/parser/terraform"
+    "github.com/ToluGIT/policyguard/pkg/policy/opa"
+    "github.com/ToluGIT/policyguard/pkg/types"
 )
 
 func analyzeWithCustomPolicy(filePath string, policyContent string) error {
@@ -462,7 +462,7 @@ import (
     "fmt"
     "io"
     
-    "github.com/policyguard/policyguard/pkg/types"
+    "github.com/ToluGIT/policyguard/pkg/types"
 )
 
 type CSVReporter struct{}
@@ -649,7 +649,7 @@ The API follows semantic versioning:
 
 Check the version:
 ```go
-import "github.com/policyguard/policyguard/pkg/version"
+import "github.com/ToluGIT/policyguard/pkg/version"
 
 fmt.Printf("PolicyGuard version: %s\n", version.Version)
 ```

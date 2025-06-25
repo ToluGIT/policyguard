@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 	
-	"github.com/policyguard/policyguard/pkg/logger"
+	"github.com/ToluGIT/policyguard/pkg/logger"
 )
 
 func main() {

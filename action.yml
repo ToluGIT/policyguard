@@ -72,7 +72,7 @@ runs:
       shell: bash
       run: |
         echo "Installing PolicyGuard..."
-        go install github.com/policyguard/policyguard/cmd/policyguard@latest
+        go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
     
     - name: Run PolicyGuard Scan
       id: scan

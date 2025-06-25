@@ -70,7 +70,7 @@ jobs:
         go-version: '1.21'
     
     - name: Install PolicyGuard
-      run: go install github.com/policyguard/policyguard/cmd/policyguard@latest
+      run: go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
     
     - name: Run PolicyGuard Scan
       run: |
@@ -119,7 +119,7 @@ policyguard:
   stage: security
   image: golang:1.21-alpine
   before_script:
-    - go install github.com/policyguard/policyguard/cmd/policyguard@latest
+    - go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
   script:
     - policyguard scan . -f sarif -o gl-sast-report.json
     - policyguard scan . -f junit -o report.xml
@@ -153,7 +153,7 @@ pipeline {
             steps {
                 sh '''
                     # Install PolicyGuard
-                    go install github.com/policyguard/policyguard/cmd/policyguard@latest
+                    go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
                     
                     # Run scan
                     policyguard scan . -f junit -o policyguard-junit.xml
@@ -198,7 +198,7 @@ node {
 
 ```dockerfile
 FROM golang:1.21-alpine AS scanner
-RUN go install github.com/policyguard/policyguard/cmd/policyguard@latest
+RUN go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
 WORKDIR /scan
 COPY . .
 RUN policyguard scan . -f json -o results.json
@@ -211,7 +211,7 @@ RUN policyguard scan . -f json -o results.json
 set -e
 
 # Install PolicyGuard
-go install github.com/policyguard/policyguard/cmd/policyguard@latest
+go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
 
 # Run scan
 policyguard scan . \
@@ -377,11 +377,11 @@ on:
 
 ```yaml
 # Use specific version
-- run: go install github.com/policyguard/policyguard/cmd/policyguard@v1.0.0
+- run: go install github.com/ToluGIT/policyguard/cmd/policyguard@v1.0.0
 
 # Or download binary
 - run: |
-    wget https://github.com/policyguard/policyguard/releases/download/v1.0.0/policyguard-linux-amd64
+    wget https://github.com/ToluGIT/policyguard/releases/download/v1.0.0/policyguard-linux-amd64
     chmod +x policyguard-linux-amd64
     sudo mv policyguard-linux-amd64 /usr/local/bin/policyguard
 ```
@@ -415,6 +415,6 @@ Complete examples are available in the `ci/` directory:
 
 ## Support
 
-- GitHub Issues: https://github.com/policyguard/policyguard/issues
+- GitHub Issues: https://github.com/ToluGIT/policyguard/issues
 - Documentation: https://policyguard.io/docs
 - Community: https://policyguard.io/community

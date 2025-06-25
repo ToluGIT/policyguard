@@ -2,7 +2,7 @@ package remediation
 
 import (
 	"context"
-	"github.com/policyguard/policyguard/pkg/types"
+	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
 // Suggester defines the interface for generating remediation suggestions

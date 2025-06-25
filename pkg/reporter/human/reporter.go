@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/policyguard/policyguard/pkg/types"
+	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
 // Reporter implements the reporter.Reporter interface for human-readable output

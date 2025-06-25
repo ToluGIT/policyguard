@@ -1,4 +1,4 @@
-module github.com/policyguard/policyguard
+module github.com/ToluGIT/policyguard
 
 go 1.21
 

@@ -74,5 +74,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] Compliance frameworks (CIS, HIPAA, PCI-DSS)
 - [ ] IDE integrations
 
-[Unreleased]: https://github.com/policyguard/policyguard/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/policyguard/policyguard/releases/tag/v0.1.0
+[Unreleased]: https://github.com/ToluGIT/policyguard/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ToluGIT/policyguard/releases/tag/v0.1.0
