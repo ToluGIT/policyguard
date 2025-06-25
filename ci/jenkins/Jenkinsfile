@@ -39,9 +39,9 @@ pipeline {
                     export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
                     
                     if [ "${POLICYGUARD_VERSION}" = "latest" ]; then
-                        go install github.com/policyguard/policyguard/cmd/policyguard@latest
+                        go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
                     else
-                        go install github.com/policyguard/policyguard/cmd/policyguard@${POLICYGUARD_VERSION}
+                        go install github.com/ToluGIT/policyguard/cmd/policyguard@${POLICYGUARD_VERSION}
                     fi
                     
                     # Verify installation

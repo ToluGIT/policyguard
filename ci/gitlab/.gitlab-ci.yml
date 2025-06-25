@@ -4,7 +4,7 @@
 # Include this template in your .gitlab-ci.yml:
 #
 # include:
-#   - remote: 'https://raw.githubusercontent.com/policyguard/policyguard/main/ci/gitlab/.gitlab-ci.yml'
+#   - remote: 'https://raw.githubusercontent.com/ToluGIT/policyguard/main/ci/gitlab/.gitlab-ci.yml'
 
 stages:
   - security
@@ -22,9 +22,9 @@ variables:
     - apk add --no-cache git curl
     - |
       if [ "$POLICYGUARD_VERSION" = "latest" ]; then
-        go install github.com/policyguard/policyguard/cmd/policyguard@latest
+        go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
       else
-        go install github.com/policyguard/policyguard/cmd/policyguard@${POLICYGUARD_VERSION}
+        go install github.com/ToluGIT/policyguard/cmd/policyguard@${POLICYGUARD_VERSION}
       fi
   script:
     - |

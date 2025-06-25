@@ -28,9 +28,9 @@ jobs:
     
     - name: Install PolicyGuard
       run: |
-        go install github.com/policyguard/policyguard/cmd/policyguard@latest
+        go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
         # Or download pre-built binary
-        # wget -O policyguard https://github.com/policyguard/policyguard/releases/latest/download/policyguard-linux-amd64
+        # wget -O policyguard https://github.com/ToluGIT/policyguard/releases/latest/download/policyguard-linux-amd64
         # chmod +x policyguard
         # sudo mv policyguard /usr/local/bin/
     
