@@ -215,6 +215,7 @@ func (r *Reporter) toSARIF(report *types.Report) *sarifReport {
 					Description: sarifMessage{
 						Text: violation.Remediation,
 					},
+					Changes: []sarifChange{}, // Empty array as we don't provide actual code changes
 				},
 			}
 		}

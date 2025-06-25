@@ -96,7 +96,7 @@ jobs:
           });
     
     - name: Fail if violations found
-      if: env.SCAN_FAILED == 'true'
+      if: ${{ env.SCAN_FAILED == 'true' }}
       run: |
         echo "Security violations were found. Please review the scan results."
         exit 1
