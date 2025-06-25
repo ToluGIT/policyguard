@@ -37,7 +37,7 @@ PolicyGuard is a security policy engine for Infrastructure as Code (IaC) that he
 
 ```bash
 # Clone the repository
-git clone https://github.com/policyguard/policyguard.git
+git clone https://github.com/ToluGIT/policyguard.git
 cd policyguard
 
 # Build the binary
@@ -50,7 +50,7 @@ sudo mv policyguard /usr/local/bin/
 ### Using Go Install
 
 ```bash
-go install github.com/policyguard/policyguard/cmd/policyguard@latest
+go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
 ```
 
 ### Prerequisites
@@ -297,7 +297,7 @@ jobs:
           go-version: '1.21'
       
       - name: Install PolicyGuard
-        run: go install github.com/policyguard/policyguard/cmd/policyguard@latest
+        run: go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
       
       - name: Run Security Scan
         run: policyguard scan . --fail-on-error --format sarif --output results.sarif
@@ -314,7 +314,7 @@ jobs:
 security-scan:
   stage: test
   script:
-    - go install github.com/policyguard/policyguard/cmd/policyguard@latest
+    - go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
     - policyguard scan . --fail-on-error --format junit --output report.xml
   artifacts:
     reports:
@@ -362,7 +362,7 @@ policyguard/
 
 ```bash
 # Clone the repository
-git clone https://github.com/policyguard/policyguard.git
+git clone https://github.com/ToluGIT/policyguard.git
 cd policyguard
 
 # Install dependencies
@@ -421,7 +421,7 @@ make coverage
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions are supported! Please see [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### How to Contribute
 
@@ -452,5 +452,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [API Documentation](docs/API.md)
 - [Security Best Practices](docs/SECURITY.md)
 
----
 
