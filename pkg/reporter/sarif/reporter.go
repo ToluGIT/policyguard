@@ -208,19 +208,9 @@ func (r *Reporter) toSARIF(report *types.Report) *sarifReport {
 			},
 		}
 
-		// Add fix if remediation is available
-	//	if violation.Remediation != "" {
-	//		changes := make([]sarifChange, 0) // Guaranteed to be empty array, not nil
-	//		
-	//		result.Fixes = []sarifFix{
-	//			{
-	//				Description: sarifMessage{
-	//					Text: violation.Remediation,
-	//				},
-	//				Changes: changes,
-	//			},
-	//		}
-	//	}
+		// Note: We don't add fixes because SARIF requires artifactChanges with minItems: 1
+		// Since we only have remediation text without actual code changes, we skip the fixes field
+		// The remediation text is already included in the help text of the rule
 
 		results = append(results, result)
 	}
