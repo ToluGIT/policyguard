@@ -10,13 +10,13 @@ PolicyGuard is a security policy engine for Infrastructure as Code (IaC) that he
 
 ## Features
 
-- ** Terraform HCL Parsing**: Parsing of Terraform configuration files
-- ** Policy Evaluation**: Evaluate resources against security policies using OPA
-- ** Multiple Output Formats**: Human-readable, JSON, JUnit, and SARIF formats
-- ** Customizable Policies**: Write your own policies in Rego
-- ** CI/CD Integration**: Exit codes and formats suitable for automation
-- ** Real-time Feedback**: Get immediate feedback on security violations
-- ** Remediation Suggestions**: Actionable fixes for security issues
+- **Terraform HCL Parsing**: Parsing of Terraform configuration files
+- **Policy Evaluation**: Evaluate resources against security policies using OPA
+- **Multiple Output Formats**: Human-readable, JSON, JUnit, and SARIF formats
+- **Customizable Policies**: Write your own policies in Rego
+- **CI/CD Integration**: Exit codes and formats suitable for automation
+- **Real-time Feedback**: Get immediate feedback on security violations
+- **Remediation Suggestions**: Actionable fixes for security issues
 
 ## Table of Contents
 

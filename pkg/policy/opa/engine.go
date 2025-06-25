@@ -11,6 +11,7 @@ import (
 	"github.com/open-policy-agent/opa/rego"
 	"github.com/open-policy-agent/opa/storage"
 	"github.com/open-policy-agent/opa/storage/inmem"
+	"github.com/ToluGIT/policyguard"
 	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
@@ -178,6 +179,15 @@ func (e *Engine) LoadPolicy(ctx context.Context, policyPath string) error {
 
 // LoadPoliciesFromDirectory loads all policies from a directory
 func (e *Engine) LoadPoliciesFromDirectory(ctx context.Context, dirPath string) error {
+	// Check if directory exists
+	if _, err := ioutil.ReadDir(dirPath); err != nil {
+		// Directory doesn't exist, try embedded policies
+		if policyguard.HasEmbeddedPolicies() {
+			return e.LoadEmbeddedPolicies(ctx)
+		}
+		return fmt.Errorf("policy directory not found and no embedded policies available: %w", err)
+	}
+	
 	// Find all .rego files
 	files, err := filepath.Glob(filepath.Join(dirPath, "*.rego"))
 	if err != nil {
@@ -194,6 +204,10 @@ func (e *Engine) LoadPoliciesFromDirectory(ctx context.Context, dirPath string) 
 	}
 
 	if len(files) == 0 {
+		// No files found in directory, try embedded policies
+		if policyguard.HasEmbeddedPolicies() {
+			return e.LoadEmbeddedPolicies(ctx)
+		}
 		return fmt.Errorf("no policy files found in %s", dirPath)
 	}
 
@@ -205,6 +219,39 @@ func (e *Engine) LoadPoliciesFromDirectory(ctx context.Context, dirPath string) 
 	}
 
 	return nil
+}
+
+// LoadEmbeddedPolicies loads policies from embedded filesystem
+func (e *Engine) LoadEmbeddedPolicies(ctx context.Context) error {
+	embeddedPolicies, err := policyguard.GetEmbeddedPolicies()
+	if err != nil {
+		return fmt.Errorf("failed to get embedded policies: %w", err)
+	}
+	
+	if len(embeddedPolicies) == 0 {
+		return fmt.Errorf("no embedded policies found")
+	}
+	
+	// Load each embedded policy
+	for path, content := range embeddedPolicies {
+		// Parse the module
+		module, err := ast.ParseModule(path, content)
+		if err != nil {
+			return fmt.Errorf("failed to parse embedded policy %s: %w", path, err)
+		}
+		
+		// Extract policy ID from path
+		policyID := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		
+		// Store the policy
+		e.policies[policyID] = &Policy{
+			ID:     policyID,
+			Module: module,
+		}
+	}
+	
+	// Compile all policies
+	return e.compile()
 }
 
 // GetLoadedPolicies returns the IDs of all loaded policies

@@ -145,22 +145,22 @@ runs:
           }
           
           // Create comment body
-          let comment = '## 🔒 PolicyGuard Security Scan Results\n\n';
+          let comment = '##PolicyGuard Security Scan Results\n\n';
           
           const totalViolations = '${{ steps.scan.outputs.total-violations }}';
           const criticalCount = '${{ steps.scan.outputs.critical-violations }}';
           const highCount = '${{ steps.scan.outputs.high-violations }}';
           
           if (totalViolations === '0') {
-            comment += '✅ **No security violations found!**\n\n';
+            comment += '**No security violations found!**\n\n';
           } else {
-            comment += `⚠️ **Found ${totalViolations} security violation(s)**\n\n`;
+            comment += `**Found ${totalViolations} security violation(s)**\n\n`;
             
             if (criticalCount > 0) {
-              comment += `🔴 Critical: ${criticalCount}\n`;
+              comment += `Critical: ${criticalCount}\n`;
             }
             if (highCount > 0) {
-              comment += `🟠 High: ${highCount}\n`;
+              comment += `High: ${highCount}\n`;
             }
             
             comment += '\n### Summary\n```\n' + summary + '```\n\n';
@@ -186,7 +186,7 @@ runs:
       shell: bash
       run: |
         if [ "$SCAN_EXIT_CODE" -ne 0 ]; then
-          echo "❌ PolicyGuard found security violations!"
+          echo "PolicyGuard found security violations!"
           exit 1
         fi
 
