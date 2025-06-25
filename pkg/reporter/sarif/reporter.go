@@ -158,7 +158,7 @@ func (r *Reporter) toSARIF(report *types.Report) *sarifReport {
 	}
 
 	// Build rules
-	var rules []sarifRule
+	rules := make([]sarifRule, 0)
 	for policyID, violation := range rulesMap {
 		level := severityToSARIFLevel(violation.Severity)
 		rule := sarifRule{
@@ -185,7 +185,7 @@ func (r *Reporter) toSARIF(report *types.Report) *sarifReport {
 	}
 
 	// Build results
-	var results []sarifResult
+	results := make([]sarifResult, 0)
 	for _, violation := range report.Violations {
 		result := sarifResult{
 			RuleID:  violation.PolicyID,
