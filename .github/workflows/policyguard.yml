@@ -1,0 +1,97 @@
+name: PolicyGuard Security Scan
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    name: IaC Security Scan
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      security-events: write  # Required for uploading SARIF results
+      pull-requests: write    # Required for PR comments
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Install PolicyGuard
+      run: |
+        go install github.com/policyguard/policyguard/cmd/policyguard@latest
+        # Or download pre-built binary
+        # wget -O policyguard https://github.com/policyguard/policyguard/releases/latest/download/policyguard-linux-amd64
+        # chmod +x policyguard
+        # sudo mv policyguard /usr/local/bin/
+    
+    - name: Run PolicyGuard Scan
+      id: scan
+      run: |
+        # Scan infrastructure code and output SARIF for GitHub Security tab
+        policyguard scan . -f sarif -o policyguard-results.sarif --fail-on-error || echo "SCAN_FAILED=true" >> $GITHUB_ENV
+        
+        # Also generate human-readable output for logs
+        policyguard scan . -o policyguard-results.txt
+        
+        # Generate JUnit XML for test reporting
+        policyguard scan . -f junit -o policyguard-junit.xml
+    
+    - name: Upload SARIF results to GitHub Security
+      if: always()
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: policyguard-results.sarif
+        category: policyguard
+    
+    - name: Upload scan results as artifact
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: policyguard-results
+        path: |
+          policyguard-results.sarif
+          policyguard-results.txt
+          policyguard-junit.xml
+    
+    - name: Publish test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: policyguard-junit.xml
+        check_name: PolicyGuard Security Scan Results
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const results = fs.readFileSync('policyguard-results.txt', 'utf8');
+          
+          // Truncate if too long
+          const maxLength = 65000;
+          const truncated = results.length > maxLength ? 
+            results.substring(0, maxLength) + '\n\n... (truncated)' : results;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## PolicyGuard Security Scan Results\n\n\`\`\`\n${truncated}\n\`\`\``
+          });
+    
+    - name: Fail if violations found
+      if: env.SCAN_FAILED == 'true'
+      run: |
+        echo "Security violations were found. Please review the scan results."
+        exit 1

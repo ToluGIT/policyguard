@@ -1,0 +1,93 @@
+# PolicyGuard GitLab CI Template
+# 
+# This template provides IaC security scanning using PolicyGuard
+# Include this template in your .gitlab-ci.yml:
+#
+# include:
+#   - remote: 'https://raw.githubusercontent.com/policyguard/policyguard/main/ci/gitlab/.gitlab-ci.yml'
+
+stages:
+  - security
+
+variables:
+  POLICYGUARD_VERSION: "latest"
+  POLICYGUARD_TARGET: "."
+  POLICYGUARD_POLICY_PATH: "policies/"
+  POLICYGUARD_FAIL_ON_ERROR: "true"
+
+.policyguard_template: &policyguard_definition
+  stage: security
+  image: golang:1.21-alpine
+  before_script:
+    - apk add --no-cache git curl
+    - |
+      if [ "$POLICYGUARD_VERSION" = "latest" ]; then
+        go install github.com/policyguard/policyguard/cmd/policyguard@latest
+      else
+        go install github.com/policyguard/policyguard/cmd/policyguard@${POLICYGUARD_VERSION}
+      fi
+  script:
+    - |
+      echo "Running PolicyGuard security scan..."
+      
+      # Run scan and generate multiple report formats
+      set +e
+      policyguard scan ${POLICYGUARD_TARGET} \
+        -p ${POLICYGUARD_POLICY_PATH} \
+        -f sarif -o gl-sast-report.json
+      SCAN_EXIT_CODE=$?
+      set -e
+      
+      # Generate human-readable report
+      policyguard scan ${POLICYGUARD_TARGET} \
+        -p ${POLICYGUARD_POLICY_PATH} \
+        -o policyguard-report.txt
+      
+      # Generate JUnit report for GitLab test reporting
+      policyguard scan ${POLICYGUARD_TARGET} \
+        -p ${POLICYGUARD_POLICY_PATH} \
+        -f junit -o policyguard-junit.xml
+      
+      # Display summary in job log
+      echo "=== PolicyGuard Scan Summary ==="
+      grep -A 10 "SUMMARY" policyguard-report.txt || true
+      
+      # Fail job if violations found and fail-on-error is true
+      if [ "$POLICYGUARD_FAIL_ON_ERROR" = "true" ] && [ $SCAN_EXIT_CODE -ne 0 ]; then
+        echo "Security violations found!"
+        exit 1
+      fi
+  artifacts:
+    reports:
+      sast: gl-sast-report.json
+      junit: policyguard-junit.xml
+    paths:
+      - policyguard-report.txt
+      - gl-sast-report.json
+      - policyguard-junit.xml
+    expire_in: 1 week
+  allow_failure: false
+
+# Default job that runs on all branches
+policyguard:security:
+  <<: *policyguard_definition
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+
+# Optional job for scheduled security scans
+policyguard:scheduled:
+  <<: *policyguard_definition
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  variables:
+    POLICYGUARD_FAIL_ON_ERROR: "false"  # Don't fail scheduled scans
+
+# Template for custom scanning with specific policies
+.policyguard:custom:
+  <<: *policyguard_definition
+  variables:
+    POLICYGUARD_POLICY_PATH: "custom-policies/"
+  rules:
+    - when: manual

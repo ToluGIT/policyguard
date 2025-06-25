@@ -1,0 +1,85 @@
+name: Test PolicyGuard Locally
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, test ]
+
+jobs:
+  test-scan:
+    name: Test Local PolicyGuard
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Build PolicyGuard
+      run: |
+        echo "Building PolicyGuard from local source..."
+        go build -o policyguard cmd/policyguard/main.go
+        chmod +x policyguard
+        ./policyguard version || echo "PolicyGuard built successfully"
+    
+    - name: Test Human Format
+      run: |
+        echo "=== Testing Human Format ==="
+        ./policyguard scan examples/terraform/1.tf
+    
+    - name: Test JSON Format
+      run: |
+        echo "=== Testing JSON Format ==="
+        ./policyguard scan examples/terraform/1.tf -f json -o results.json
+        cat results.json | jq .summary
+    
+    - name: Test SARIF Format
+      run: |
+        echo "=== Testing SARIF Format ==="
+        ./policyguard scan examples/terraform/1.tf -f sarif -o results.sarif
+        # Validate SARIF format
+        cat results.sarif | jq '.version, .runs[0].tool.driver.name'
+    
+    - name: Test JUnit Format
+      run: |
+        echo "=== Testing JUnit Format ==="
+        ./policyguard scan examples/terraform/1.tf -f junit -o results.xml
+        # Display first few lines
+        head -20 results.xml
+    
+    - name: Test Directory Scan
+      run: |
+        echo "=== Testing Directory Scan ==="
+        ./policyguard scan examples/terraform/ -f json -o full-results.json
+        cat full-results.json | jq '.summary'
+    
+    - name: Test with Fail on Error
+      id: fail_test
+      continue-on-error: true
+      run: |
+        echo "=== Testing Fail on Error ==="
+        ./policyguard scan examples/terraform/1.tf --fail-on-error
+        echo "Exit code: $?"
+    
+    - name: Check Fail on Error worked
+      run: |
+        if [ "${{ steps.fail_test.outcome }}" == "failure" ]; then
+          echo "✅ Fail on error worked correctly (found violations)"
+        else
+          echo "❌ Fail on error did not work as expected"
+          exit 1
+        fi
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: scan-results
+        path: |
+          results.json
+          results.sarif
+          results.xml
+          full-results.json

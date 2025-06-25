@@ -1,0 +1,195 @@
+name: 'PolicyGuard IaC Security Scanner'
+description: 'Scan Infrastructure as Code for security vulnerabilities and policy violations'
+author: 'PolicyGuard'
+
+inputs:
+  target:
+    description: 'Target directory or file to scan'
+    required: false
+    default: '.'
+  
+  policy-path:
+    description: 'Path to custom policy files'
+    required: false
+    default: 'policies/'
+  
+  format:
+    description: 'Output format (human, json, sarif, junit)'
+    required: false
+    default: 'sarif'
+  
+  output-file:
+    description: 'Output file path'
+    required: false
+    default: 'policyguard-results.sarif'
+  
+  fail-on-error:
+    description: 'Fail the action if violations are found'
+    required: false
+    default: 'true'
+  
+  severity-threshold:
+    description: 'Minimum severity to report (critical, high, medium, low)'
+    required: false
+    default: 'low'
+  
+  upload-sarif:
+    description: 'Upload SARIF results to GitHub Security tab'
+    required: false
+    default: 'true'
+  
+  comment-pr:
+    description: 'Comment on PR with scan results'
+    required: false
+    default: 'true'
+
+outputs:
+  violations-found:
+    description: 'Whether security violations were found'
+    value: ${{ steps.scan.outputs.violations-found }}
+  
+  total-violations:
+    description: 'Total number of violations found'
+    value: ${{ steps.scan.outputs.total-violations }}
+  
+  critical-violations:
+    description: 'Number of critical violations'
+    value: ${{ steps.scan.outputs.critical-violations }}
+  
+  high-violations:
+    description: 'Number of high severity violations'
+    value: ${{ steps.scan.outputs.high-violations }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Install PolicyGuard
+      shell: bash
+      run: |
+        echo "Installing PolicyGuard..."
+        go install github.com/policyguard/policyguard/cmd/policyguard@latest
+    
+    - name: Run PolicyGuard Scan
+      id: scan
+      shell: bash
+      run: |
+        echo "Running PolicyGuard scan..."
+        
+        # Run scan with specified parameters
+        SCAN_CMD="policyguard scan ${{ inputs.target }}"
+        
+        if [ "${{ inputs.policy-path }}" != "policies/" ]; then
+          SCAN_CMD="$SCAN_CMD -p ${{ inputs.policy-path }}"
+        fi
+        
+        # Execute scan and capture exit code
+        set +e
+        $SCAN_CMD -f ${{ inputs.format }} -o ${{ inputs.output-file }}
+        SCAN_EXIT_CODE=$?
+        set -e
+        
+        # Generate human-readable output for analysis
+        $SCAN_CMD -o policyguard-human.txt
+        
+        # Parse results
+        if [ -f "policyguard-human.txt" ]; then
+          TOTAL_VIOLATIONS=$(grep "Total Violations Found:" policyguard-human.txt | awk '{print $4}')
+          CRITICAL=$(grep "CRITICAL:" policyguard-human.txt | awk '{print $2}' || echo "0")
+          HIGH=$(grep "HIGH:" policyguard-human.txt | awk '{print $2}' || echo "0")
+          
+          echo "violations-found=$( [ "$TOTAL_VIOLATIONS" -gt 0 ] && echo "true" || echo "false" )" >> $GITHUB_OUTPUT
+          echo "total-violations=${TOTAL_VIOLATIONS:-0}" >> $GITHUB_OUTPUT
+          echo "critical-violations=${CRITICAL:-0}" >> $GITHUB_OUTPUT
+          echo "high-violations=${HIGH:-0}" >> $GITHUB_OUTPUT
+        fi
+        
+        # Store exit code for later
+        echo "SCAN_EXIT_CODE=$SCAN_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: Upload SARIF to GitHub Security
+      if: inputs.upload-sarif == 'true' && inputs.format == 'sarif'
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: ${{ inputs.output-file }}
+        category: policyguard
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request' && inputs.comment-pr == 'true'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const results = fs.readFileSync('policyguard-human.txt', 'utf8');
+          
+          // Extract summary information
+          const lines = results.split('\n');
+          let summary = '';
+          let inSummary = false;
+          
+          for (const line of lines) {
+            if (line.includes('SUMMARY')) {
+              inSummary = true;
+              continue;
+            }
+            if (line.includes('VIOLATIONS') && inSummary) {
+              break;
+            }
+            if (inSummary && line.trim()) {
+              summary += line + '\n';
+            }
+          }
+          
+          // Create comment body
+          let comment = '## 🔒 PolicyGuard Security Scan Results\n\n';
+          
+          const totalViolations = '${{ steps.scan.outputs.total-violations }}';
+          const criticalCount = '${{ steps.scan.outputs.critical-violations }}';
+          const highCount = '${{ steps.scan.outputs.high-violations }}';
+          
+          if (totalViolations === '0') {
+            comment += '✅ **No security violations found!**\n\n';
+          } else {
+            comment += `⚠️ **Found ${totalViolations} security violation(s)**\n\n`;
+            
+            if (criticalCount > 0) {
+              comment += `🔴 Critical: ${criticalCount}\n`;
+            }
+            if (highCount > 0) {
+              comment += `🟠 High: ${highCount}\n`;
+            }
+            
+            comment += '\n### Summary\n```\n' + summary + '```\n\n';
+            comment += '<details>\n<summary>View detailed results</summary>\n\n```\n';
+            
+            // Add truncated results
+            const maxLength = 60000;
+            const truncated = results.length > maxLength ? 
+              results.substring(0, maxLength) + '\n\n... (truncated)' : results;
+            
+            comment += truncated + '\n```\n</details>';
+          }
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+    
+    - name: Check failure condition
+      if: inputs.fail-on-error == 'true'
+      shell: bash
+      run: |
+        if [ "$SCAN_EXIT_CODE" -ne 0 ]; then
+          echo "❌ PolicyGuard found security violations!"
+          exit 1
+        fi
+
+branding:
+  icon: 'shield'
+  color: 'blue'

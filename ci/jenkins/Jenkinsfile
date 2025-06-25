@@ -1,0 +1,236 @@
+// PolicyGuard Jenkins Pipeline
+// 
+// This Jenkinsfile provides IaC security scanning using PolicyGuard
+// Configure the following environment variables in Jenkins:
+// - POLICYGUARD_VERSION (default: latest)
+// - POLICYGUARD_FAIL_ON_ERROR (default: true)
+
+pipeline {
+    agent any
+    
+    environment {
+        POLICYGUARD_VERSION = "${env.POLICYGUARD_VERSION ?: 'latest'}"
+        POLICYGUARD_TARGET = "${env.POLICYGUARD_TARGET ?: '.'}"
+        POLICYGUARD_POLICY_PATH = "${env.POLICYGUARD_POLICY_PATH ?: 'policies/'}"
+        POLICYGUARD_FAIL_ON_ERROR = "${env.POLICYGUARD_FAIL_ON_ERROR ?: 'true'}"
+    }
+    
+    stages {
+        stage('Setup') {
+            steps {
+                script {
+                    // Install Go if not available
+                    sh '''
+                        if ! command -v go &> /dev/null; then
+                            echo "Installing Go..."
+                            wget -q https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
+                            sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+                            export PATH=$PATH:/usr/local/go/bin
+                        fi
+                    '''
+                }
+            }
+        }
+        
+        stage('Install PolicyGuard') {
+            steps {
+                sh '''
+                    echo "Installing PolicyGuard ${POLICYGUARD_VERSION}..."
+                    export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+                    
+                    if [ "${POLICYGUARD_VERSION}" = "latest" ]; then
+                        go install github.com/policyguard/policyguard/cmd/policyguard@latest
+                    else
+                        go install github.com/policyguard/policyguard/cmd/policyguard@${POLICYGUARD_VERSION}
+                    fi
+                    
+                    # Verify installation
+                    $HOME/go/bin/policyguard version || echo "PolicyGuard installation completed"
+                '''
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                script {
+                    def scanFailed = false
+                    
+                    sh '''
+                        export PATH=$PATH:$HOME/go/bin
+                        echo "Running PolicyGuard security scan..."
+                        
+                        # Run scan with SARIF output
+                        set +e
+                        policyguard scan ${POLICYGUARD_TARGET} \
+                            -p ${POLICYGUARD_POLICY_PATH} \
+                            -f sarif -o policyguard-sarif.json
+                        SCAN_EXIT_CODE=$?
+                        set -e
+                        
+                        # Generate human-readable report
+                        policyguard scan ${POLICYGUARD_TARGET} \
+                            -p ${POLICYGUARD_POLICY_PATH} \
+                            -o policyguard-report.txt
+                        
+                        # Generate JUnit report
+                        policyguard scan ${POLICYGUARD_TARGET} \
+                            -p ${POLICYGUARD_POLICY_PATH} \
+                            -f junit -o policyguard-junit.xml
+                        
+                        # Display summary
+                        echo "=== PolicyGuard Scan Summary ==="
+                        cat policyguard-report.txt | grep -A 10 "SUMMARY" || true
+                        
+                        # Save exit code
+                        echo $SCAN_EXIT_CODE > scan_exit_code.txt
+                    '''
+                    
+                    // Check if scan failed
+                    def exitCode = sh(script: 'cat scan_exit_code.txt', returnStdout: true).trim()
+                    if (exitCode != '0') {
+                        scanFailed = true
+                        
+                        if (env.POLICYGUARD_FAIL_ON_ERROR == 'true') {
+                            error("PolicyGuard found security violations!")
+                        } else {
+                            unstable("PolicyGuard found security violations")
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Publish Results') {
+            steps {
+                // Archive artifacts
+                archiveArtifacts artifacts: 'policyguard-*.json, policyguard-*.xml, policyguard-*.txt', 
+                                 allowEmptyArchive: false
+                
+                // Publish JUnit test results
+                junit 'policyguard-junit.xml'
+                
+                // Publish scan results to Jenkins warnings plugin (if installed)
+                recordIssues(
+                    enabledForFailure: true,
+                    tools: [
+                        groovyScript(
+                            parserId: 'policyguard-parser',
+                            pattern: 'policyguard-report.txt',
+                            reportEncoding: 'UTF-8'
+                        )
+                    ]
+                )
+                
+                // If using Blue Ocean, add badge
+                script {
+                    def summary = sh(script: '''
+                        grep "Total Violations Found:" policyguard-report.txt | awk '{print $4}'
+                    ''', returnStdout: true).trim()
+                    
+                    if (summary && summary != '0') {
+                        addBadge(icon: "warning.gif", text: "PolicyGuard: ${summary} violations")
+                    } else {
+                        addBadge(icon: "success.gif", text: "PolicyGuard: Passed")
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Clean workspace
+            cleanWs()
+        }
+        
+        failure {
+            emailext (
+                subject: "PolicyGuard Security Scan Failed: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
+                body: '''${SCRIPT, template="groovy-html.template"}
+                
+                PolicyGuard found security violations in the infrastructure code.
+                Please review the scan results and fix the issues.
+                
+                View full report: ${BUILD_URL}artifact/policyguard-report.txt
+                ''',
+                to: "${env.CHANGE_AUTHOR_EMAIL}",
+                attachmentsPattern: 'policyguard-report.txt'
+            )
+        }
+    }
+}
+
+// Groovy parser for warnings plugin
+// Save this as policyguard-parser.groovy in Jenkins configuration
+/*
+import edu.hm.hafner.analysis.IssueBuilder
+import edu.hm.hafner.analysis.IssueParser
+import edu.hm.hafner.analysis.ParsingException
+import edu.hm.hafner.analysis.ReaderFactory
+import edu.hm.hafner.analysis.Report
+import edu.hm.hafner.analysis.Severity
+
+class PolicyGuardParser extends IssueParser {
+    @Override
+    Report parse(ReaderFactory readerFactory) throws ParsingException {
+        Report report = new Report()
+        
+        readerFactory.readStream().withCloseable { reader ->
+            String line
+            String currentFile = ""
+            Severity currentSeverity = Severity.WARNING_NORMAL
+            
+            while ((line = reader.readLine()) != null) {
+                // Parse severity sections
+                if (line.contains("[CRITICAL]")) {
+                    currentSeverity = Severity.ERROR
+                } else if (line.contains("[HIGH]")) {
+                    currentSeverity = Severity.WARNING_HIGH
+                } else if (line.contains("[MEDIUM]")) {
+                    currentSeverity = Severity.WARNING_NORMAL
+                } else if (line.contains("[LOW]")) {
+                    currentSeverity = Severity.WARNING_LOW
+                }
+                
+                // Parse violations
+                def matcher = line =~ /Resource: (.+)/
+                if (matcher) {
+                    def resource = matcher[0][1]
+                    
+                    // Read next lines for details
+                    def location = reader.readLine()
+                    def policy = reader.readLine()
+                    def details = reader.readLine()
+                    def fix = reader.readLine()
+                    
+                    def locationMatcher = location =~ /Location: (.+):(\d+):(\d+)/
+                    if (locationMatcher) {
+                        currentFile = locationMatcher[0][1]
+                        def lineNum = Integer.parseInt(locationMatcher[0][2])
+                        def column = Integer.parseInt(locationMatcher[0][3])
+                        
+                        def policyMatcher = policy =~ /Policy:\s+(.+)/
+                        def policyId = policyMatcher ? policyMatcher[0][1] : "unknown"
+                        
+                        def detailsMatcher = details =~ /Details:\s+(.+)/
+                        def message = detailsMatcher ? detailsMatcher[0][1] : line
+                        
+                        report.add(new IssueBuilder()
+                            .setFileName(currentFile)
+                            .setLineStart(lineNum)
+                            .setColumnStart(column)
+                            .setCategory(policyId)
+                            .setMessage(message)
+                            .setSeverity(currentSeverity)
+                            .build())
+                    }
+                }
+            }
+        }
+        
+        return report
+    }
+}
+
+return new PolicyGuardParser()
+*/
