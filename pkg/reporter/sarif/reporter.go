@@ -209,18 +209,18 @@ func (r *Reporter) toSARIF(report *types.Report) *sarifReport {
 		}
 
 		// Add fix if remediation is available
-		if violation.Remediation != "" {
-			changes := make([]sarifChange, 0) // Guaranteed to be empty array, not nil
-			
-			result.Fixes = []sarifFix{
-				{
-					Description: sarifMessage{
-						Text: violation.Remediation,
-					},
-					Changes: changes,
-				},
-			}
-		}
+	//	if violation.Remediation != "" {
+	//		changes := make([]sarifChange, 0) // Guaranteed to be empty array, not nil
+	//		
+	//		result.Fixes = []sarifFix{
+	//			{
+	//				Description: sarifMessage{
+	//					Text: violation.Remediation,
+	//				},
+	//				Changes: changes,
+	//			},
+	//		}
+	//	}
 
 		results = append(results, result)
 	}
