@@ -149,39 +149,39 @@ type sarifContent struct {
 }
 
 func (r *Reporter) toSARIF(report *types.Report) *sarifReport {
-	// Collect unique rules
-	rulesMap := make(map[string]*types.PolicyViolation)
+	// Collect unique rules and build generic descriptions
+	rulesMap := make(map[string]*sarifRule)
 	for _, violation := range report.Violations {
 		if _, exists := rulesMap[violation.PolicyID]; !exists {
-			rulesMap[violation.PolicyID] = &violation
+			// Create a generic rule description based on policy ID
+			rule := sarifRule{
+				ID:   violation.PolicyID,
+				Name: violation.PolicyID,
+				ShortDescription: sarifText{
+					Text: getPolicyTitle(violation.PolicyID),
+				},
+				FullDescription: sarifText{
+					Text: violation.Details,
+				},
+				Help: sarifText{
+					Text: violation.Remediation,
+				},
+				DefaultConfig: sarifRuleConfig{
+					Level: severityToSARIFLevel(violation.Severity),
+				},
+				Properties: map[string]interface{}{
+					"severity": violation.Severity,
+					"tags":     []string{"security", "infrastructure-as-code", "terraform"},
+				},
+			}
+			rulesMap[violation.PolicyID] = &rule
 		}
 	}
 
-	// Build rules
+	// Build rules array
 	rules := make([]sarifRule, 0)
-	for policyID, violation := range rulesMap {
-		level := severityToSARIFLevel(violation.Severity)
-		rule := sarifRule{
-			ID:   policyID,
-			Name: policyID,
-			ShortDescription: sarifText{
-				Text: violation.Message,
-			},
-			FullDescription: sarifText{
-				Text: violation.Details,
-			},
-			Help: sarifText{
-				Text: violation.Remediation,
-			},
-			DefaultConfig: sarifRuleConfig{
-				Level: level,
-			},
-			Properties: map[string]interface{}{
-				"severity": violation.Severity,
-				"tags":     []string{"security", "infrastructure-as-code", "terraform"},
-			},
-		}
-		rules = append(rules, rule)
+	for _, rule := range rulesMap {
+		rules = append(rules, *rule)
 	}
 
 	// Build results
@@ -247,4 +247,94 @@ func severityToSARIFLevel(severity string) string {
 	default:
 		return "warning"
 	}
+}
+
+// getPolicyTitle returns a generic title for a given policy ID
+func getPolicyTitle(policyID string) string {
+	titles := map[string]string{
+		// S3 policies
+		"s3_bucket_encryption": "S3 Bucket Encryption",
+		"s3_bucket_public_access": "S3 Bucket Public Access",
+		"s3_bucket_logging": "S3 Bucket Logging",
+		"s3_public_access_block_acls": "S3 Public Access Block - Block Public ACLs",
+		"s3_public_access_block_policy": "S3 Public Access Block - Block Public Policy",
+		"s3_public_access_ignore_acls": "S3 Public Access Block - Ignore Public ACLs",
+		"s3_public_access_restrict_buckets": "S3 Public Access Block - Restrict Public Buckets",
+		
+		// EC2 policies
+		"ec2_instance_encryption": "EC2 Instance Volume Encryption",
+		"ec2_instance_public_ip": "EC2 Instance Public IP",
+		"ec2_instance_imdsv2": "EC2 Instance IMDSv2",
+		"ec2_instance_security": "EC2 Instance Security",
+		"security_group_ssh_open": "Security Group SSH Access",
+		"security_group_unrestricted": "Security Group Unrestricted Access",
+		"ebs_volume_encryption": "EBS Volume Encryption",
+		
+		// IAM policies
+		"iam_no_wildcard_actions": "IAM Wildcard Actions",
+		"iam_no_wildcard_resources": "IAM Wildcard Resources",
+		"iam_user_mfa_required": "IAM User MFA Required",
+		"iam_role_require_mfa": "IAM Role MFA Required",
+		"iam_role_trust_policy": "IAM Role Trust Policy",
+		"iam_no_inline_policies": "IAM Inline Policies",
+		"iam_password_policy_length": "IAM Password Policy Length",
+		"iam_password_complexity": "IAM Password Complexity",
+		"iam_password_rotation": "IAM Password Rotation",
+		"iam_access_key_rotation": "IAM Access Key Rotation",
+		
+		// RDS policies
+		"rds_encryption": "RDS Encryption at Rest",
+		"rds_backup_retention": "RDS Backup Retention",
+		"rds_multi_az": "RDS Multi-AZ Deployment",
+		"rds_public_access": "RDS Public Access",
+		"rds_deletion_protection": "RDS Deletion Protection",
+		"rds_minor_version_upgrade": "RDS Auto Minor Version Upgrade",
+		"rds_monitoring": "RDS Enhanced Monitoring",
+		"rds_backup_window": "RDS Backup Window",
+		"rds_storage_autoscaling": "RDS Storage Autoscaling",
+		"rds_storage_type": "RDS Storage Type",
+		"rds_engine_version": "RDS Engine Version",
+		"rds_maintenance_window": "RDS Maintenance Window",
+		
+		// VPC policies
+		"vpc_flow_logs": "VPC Flow Logs",
+		"vpc_default_security_group": "VPC Default Security Group",
+		"vpc_network_acl_unrestricted": "VPC Network ACL Unrestricted",
+		"vpc_network_acl_ingress": "VPC Network ACL Ingress Rules",
+		"vpc_network_acl_egress": "VPC Network ACL Egress Rules",
+		"vpc_subnet_public_ip": "VPC Subnet Auto-assign Public IP",
+		"vpc_subnet_availability_zone": "VPC Subnet Availability Zone",
+		"vpc_endpoint_policy": "VPC Endpoint Policy",
+		"vpc_endpoint_private_dns": "VPC Endpoint Private DNS",
+		"vpc_security_group_description": "VPC Security Group Description",
+		"vpc_cidr_block_size": "VPC CIDR Block Size",
+		"vpc_dns_hostnames": "VPC DNS Hostnames",
+		
+		// Lambda policies
+		"lambda_env_encryption": "Lambda Environment Variables Encryption",
+		"lambda_env_secrets": "Lambda Environment Variables Secrets",
+		"lambda_dlq": "Lambda Dead Letter Queue",
+		"lambda_tracing": "Lambda X-Ray Tracing",
+		"lambda_vpc_config": "Lambda VPC Configuration",
+		"lambda_timeout": "Lambda Timeout Configuration",
+		"lambda_memory": "Lambda Memory Configuration",
+		"lambda_concurrent_executions": "Lambda Concurrent Executions",
+		"lambda_runtime": "Lambda Runtime Version",
+		"lambda_code_signing": "Lambda Code Signing",
+		"lambda_cors": "Lambda CORS Configuration",
+		"lambda_layers": "Lambda Layers Security",
+	}
+	
+	if title, exists := titles[policyID]; exists {
+		return title
+	}
+	
+	// Fallback: convert policy_id to title case
+	words := strings.Split(policyID, "_")
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(word[:1]) + word[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }

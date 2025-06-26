@@ -1,0 +1,87 @@
+Run github/codeql-action/upload-sarif@v3
+Uploading results
+Error details: instance.runs[0].results[0].fixes[0].artifactChanges does not meet minimum length of 1
+  {
+    "path": [
+      "runs",
+      0,
+      "results",
+      0,
+      "fixes",
+      0,
+      "artifactChanges"
+    ],
+    "property": "instance.runs[0].results[0].fixes[0].artifactChanges",
+    "message": "does not meet minimum length of 1",
+    "schema": {
+      "description": "One or more artifact changes that comprise a fix for a result.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/artifactChange"
+      }
+    },
+    "instance": [],
+    "name": "minItems",
+    "argument": 1,
+    "stack": "instance.runs[0].results[0].fixes[0].artifactChanges does not meet minimum length of 1"
+  }
+Error details: instance.runs[0].results[1].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[2].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[3].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[4].fixes[0].artifactChanges does not meet minimum length of 1
+  {
+    "path": [
+      "runs",
+      0,
+      "results",
+      4,
+      "fixes",
+      0,
+      "artifactChanges"
+    ],
+    "property": "instance.runs[0].results[4].fixes[0].artifactChanges",
+    "message": "does not meet minimum length of 1",
+    "schema": {
+      "description": "One or more artifact changes that comprise a fix for a result.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/artifactChange"
+      }
+    },
+    "instance": [],
+    "name": "minItems",
+    "argument": 1,
+    "stack": "instance.runs[0].results[4].fixes[0].artifactChanges does not meet minimum length of 1"
+  }
+Error details: instance.runs[0].results[5].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[6].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[7].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[8].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[9].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[10].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[11].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[12].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[13].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[14].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[15].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[16].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[17].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[18].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[19].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[20].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[21].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[22].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[23].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[24].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[25].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[26].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[27].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[28].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[29].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[30].fixes[0].artifactChanges does not meet minimum length of 1
+Error details: instance.runs[0].results[31].fixes[0].artifactChanges does not meet minimum length of 1
+
