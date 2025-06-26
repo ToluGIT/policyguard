@@ -38,13 +38,13 @@ jobs:
       id: scan
       run: |
         # Scan example Terraform files and output SARIF for GitHub Security tab
-        policyguard scan examples/terraform/ -f sarif -o policyguard-results.sarif || echo "SCAN_FAILED=true" >> $GITHUB_ENV
+        policyguard scan examples/terraform/insecure_complete.tf -f sarif -o policyguard-results.sarif || echo "SCAN_FAILED=true" >> $GITHUB_ENV
         
         # Also generate human-readable output for logs
-        policyguard scan examples/terraform/ -o policyguard-results.txt
+        policyguard scan examples/terraform/insecure_complete.tf -o policyguard-results.txt
         
         # Generate JUnit XML for test reporting
-        policyguard scan examples/terraform/ -f junit -o policyguard-junit.xml
+        policyguard scan examples/terraform/insecure_complete.tf -f junit -o policyguard-junit.xml
         
         # Display summary in the logs
         echo "=== PolicyGuard Scan Summary ==="

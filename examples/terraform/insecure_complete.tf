@@ -1,4 +1,4 @@
-# Comprehensive example of various AWS resources with security issues
+# example of various AWS resources with security issues
 
 # Insecure S3 bucket
 resource "aws_s3_bucket" "data_bucket" {
