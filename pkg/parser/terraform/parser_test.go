@@ -166,6 +166,83 @@ resource "aws_s3_bucket" "test" {
 			want:    nil,
 			wantErr: true,
 		},
+		{
+			name:     "parse OpenTofu s3 bucket",
+			filename: "test_s3.tofu",
+			content: `
+resource "aws_s3_bucket" "opentofu_test" {
+  bucket = "my-opentofu-bucket"
+  
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+  
+  tags = {
+    Name = "OpenTofu Test Bucket"
+    ManagedBy = "OpenTofu"
+  }
+}`,
+			want: []types.Resource{
+				{
+					ID:       "aws_s3_bucket.opentofu_test",
+					Type:     "aws_s3_bucket",
+					Provider: "aws",
+					Name:     "opentofu_test",
+					Attributes: map[string]interface{}{
+						"bucket": "my-opentofu-bucket",
+						"server_side_encryption_configuration": map[string]interface{}{
+							"rule": map[string]interface{}{
+								"apply_server_side_encryption_by_default": map[string]interface{}{
+									"sse_algorithm": "AES256",
+								},
+							},
+						},
+						"tags": map[string]interface{}{
+							"Name":      "OpenTofu Test Bucket",
+							"ManagedBy": "OpenTofu",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:     "parse OpenTofu JSON format",
+			filename: "test_ec2.tofu.json",
+			content: `{
+  "resource": {
+    "aws_instance": {
+      "opentofu_json": {
+        "ami": "ami-12345678",
+        "instance_type": "t3.micro",
+        "tags": {
+          "Name": "OpenTofu JSON Instance"
+        }
+      }
+    }
+  }
+}`,
+			want: []types.Resource{
+				{
+					ID:       "aws_instance.opentofu_json",
+					Type:     "aws_instance",
+					Provider: "aws",
+					Name:     "opentofu_json",
+					Attributes: map[string]interface{}{
+						"ami":           "ami-12345678",
+						"instance_type": "t3.micro",
+						"tags": map[string]interface{}{
+							"Name": "OpenTofu JSON Instance",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -229,6 +306,22 @@ resource "aws_instance" "test2" {
   ami = "ami-12345678"
   instance_type = "t2.micro"
 }`,
+		"rds.tofu": `
+resource "aws_db_instance" "test3" {
+  identifier = "opentofu-db"
+  engine = "postgres"
+  instance_class = "db.t3.micro"
+}`,
+		"lambda.tofu.json": `{
+  "resource": {
+    "aws_lambda_function": {
+      "test4": {
+        "function_name": "opentofu-lambda",
+        "runtime": "python3.9"
+      }
+    }
+  }
+}`,
 		// Skip JSON parsing for now as it requires different handling
 		"not_terraform.txt": `This should be ignored`,
 	}
@@ -246,15 +339,17 @@ resource "aws_instance" "test2" {
 		t.Fatalf("ParseDirectory() error = %v", err)
 	}
 	
-	// Should find 2 resources from .tf files
-	if len(resources) != 2 {
-		t.Errorf("ParseDirectory() returned %d resources, want 2", len(resources))
+	// Should find 4 resources from .tf, .tofu, and .tofu.json files
+	if len(resources) != 4 {
+		t.Errorf("ParseDirectory() returned %d resources, want 4", len(resources))
 	}
 	
 	// Check resource IDs
 	expectedIDs := map[string]bool{
-		"aws_s3_bucket.test1": false,
-		"aws_instance.test2":  false,
+		"aws_s3_bucket.test1":       false,
+		"aws_instance.test2":        false,
+		"aws_db_instance.test3":     false,
+		"aws_lambda_function.test4": false,
 	}
 	
 	for _, resource := range resources {
@@ -274,7 +369,7 @@ func TestParser_SupportedExtensions(t *testing.T) {
 	parser := New()
 	
 	extensions := parser.SupportedExtensions()
-	expected := []string{".tf", ".tf.json"}
+	expected := []string{".tf", ".tf.json", ".tofu", ".tofu.json"}
 	
 	if len(extensions) != len(expected) {
 		t.Errorf("SupportedExtensions() returned %d extensions, want %d", len(extensions), len(expected))

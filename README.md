@@ -6,11 +6,11 @@
   <img src="https://img.shields.io/badge/Platform-Linux%20|%20macOS%20|%20Windows-blue?style=for-the-badge" alt="Platform">
 </p>
 
-PolicyGuard is a security policy engine for Infrastructure as Code (IaC) that helps identify security issues and compliance violations in Terraform configurations. It uses Open Policy Agent (OPA) to evaluate resources against customizable security policies.
+PolicyGuard is a security policy engine for Infrastructure as Code (IaC) that helps identify security issues and compliance violations in Terraform and OpenTofu configurations. It uses Open Policy Agent (OPA) to evaluate resources against customizable security policies.
 
 ## Features
 
-- **Terraform HCL Parsing**: Parsing of Terraform configuration files
+- **Terraform & OpenTofu Support**: Parse both Terraform (.tf, .tf.json) and OpenTofu (.tofu, .tofu.json) configuration files
 - **Policy Evaluation**: Evaluate resources against security policies using OPA
 - **Multiple Output Formats**: Human-readable, JSON, JUnit, and SARIF formats
 - **Customizable Policies**: Write your own policies in Rego
@@ -56,7 +56,7 @@ go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
 ### Prerequisites
 
 - Go 1.21 or later
-- Terraform files to scan
+- Terraform or OpenTofu configuration files to scan
 
 ## Quick Start
 
@@ -65,17 +65,22 @@ go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
 policyguard scan main.tf
 ```
 
-2. **Scan a directory**:
+2. **Scan an OpenTofu file**:
+```bash
+policyguard scan main.tofu
+```
+
+3. **Scan a directory (supports both .tf and .tofu files)**:
 ```bash
 policyguard scan ./infrastructure
 ```
 
-3. **Get JSON output**:
+4. **Get JSON output**:
 ```bash
 policyguard scan main.tf --format json
 ```
 
-4. **Fail on violations (for CI/CD)**:
+5. **Fail on violations (for CI/CD)**:
 ```bash
 policyguard scan main.tf --fail-on-error
 ```
@@ -85,14 +90,17 @@ policyguard scan main.tf --fail-on-error
 ### Basic Scanning
 
 ```bash
-# Scan a single file
+# Scan Terraform files
 policyguard scan vpc.tf
 
-# Scan multiple files
-policyguard scan *.tf
+# Scan OpenTofu files
+policyguard scan vpc.tofu
 
-# Scan a directory recursively
-policyguard scan ./terraform
+# Scan multiple files (both .tf and .tofu)
+policyguard scan *.tf *.tofu
+
+# Scan a directory recursively (finds all .tf, .tf.json, .tofu, .tofu.json files)
+policyguard scan ./infrastructure
 
 # Use custom policies
 policyguard scan main.tf --policy ./custom-policies
