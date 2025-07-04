@@ -1,6 +1,3 @@
-# rds-violations.tf
-# This configuration will trigger multiple RDS policy violations
-
 # RDS instance without encryption (violation: rds-no-encryption)
 resource "aws_db_instance" "unencrypted_db" {
   identifier     = "prod-database"

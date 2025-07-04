@@ -1,5 +1,3 @@
-# vpc-violations.tf
-# This configuration will trigger multiple VPC and network policy violations
 
 # VPC without flow logs (violation: vpc-no-flow-logs)
 resource "aws_vpc" "no_flow_logs" {

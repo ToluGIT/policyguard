@@ -1,6 +1,3 @@
-# lambda-violations.tf
-# This configuration will trigger multiple Lambda function policy violations
-
 # Lambda with unencrypted environment variables (violation: lambda-env-vars-no-encryption)
 resource "aws_lambda_function" "unencrypted_env" {
   function_name = "payment-processor"

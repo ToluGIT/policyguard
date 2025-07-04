@@ -1,6 +1,3 @@
-# ec2-violations.tf
-# This configuration will trigger multiple EC2 and Security Group policy violations
-
 # EC2 instance with public IP (violation: ec2-public-ip)
 resource "aws_instance" "public_instance" {
   name                    = "public-web-server"

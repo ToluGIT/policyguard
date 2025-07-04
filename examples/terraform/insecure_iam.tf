@@ -1,6 +1,3 @@
-# iam-violations.tf
-# This configuration will trigger multiple IAM policy violations
-
 # IAM policy with wildcard actions (violation: iam-wildcard-action)
 resource "aws_iam_policy" "wildcard_actions" {
   name = "overly-permissive-policy"
