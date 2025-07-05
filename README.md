@@ -50,7 +50,7 @@ sudo mv policyguard /usr/local/bin/
 ### Using Go Install
 
 ```bash
-go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
+go install github.com/ToluGIT/policyguard/cmd/policyguard@v1.0.0
 ```
 
 ### Prerequisites
@@ -305,7 +305,7 @@ jobs:
           go-version: '1.21'
       
       - name: Install PolicyGuard
-        run: go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
+        run: go install github.com/ToluGIT/policyguard/cmd/policyguard@v1.0.0
       
       - name: Run Security Scan
         run: policyguard scan . --fail-on-error --format sarif --output results.sarif
@@ -322,7 +322,7 @@ jobs:
 security-scan:
   stage: test
   script:
-    - go install github.com/ToluGIT/policyguard/cmd/policyguard@latest
+    - go install github.com/ToluGIT/policyguard/cmd/policyguard@v1.0.0
     - policyguard scan . --fail-on-error --format junit --output report.xml
   artifacts:
     reports:
