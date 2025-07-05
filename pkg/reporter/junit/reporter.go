@@ -34,11 +34,21 @@ func (r *Reporter) Generate(ctx context.Context, result *types.PolicyResult, res
 		violationsBySeverity[v.Severity]++
 	}
 
+	// Calculate pass rate based on resources with violations (not total violations)
+	// This gives a more accurate representation: what percentage of resources are clean?
+	resourcesWithViolations := r.countResourcesWithViolations(result.Violations)
+	var passRate float64
+	if len(resources) > 0 {
+		passRate = float64(len(resources)-resourcesWithViolations) / float64(len(resources)) * 100
+	} else {
+		passRate = 100 // No resources means 100% pass rate
+	}
+
 	report.Summary = types.Summary{
 		TotalResources:       len(resources),
 		TotalViolations:      len(result.Violations),
 		ViolationsBySeverity: violationsBySeverity,
-		PassRate:             float64(len(resources)-len(result.Violations)) / float64(len(resources)) * 100,
+		PassRate:             passRate,
 	}
 
 	return report, nil
@@ -54,6 +64,15 @@ func (r *Reporter) Write(ctx context.Context, report *types.Report, writer io.Wr
 	fmt.Fprintln(writer, `<?xml version="1.0" encoding="UTF-8"?>`)
 	
 	return encoder.Encode(testSuites)
+}
+
+// countResourcesWithViolations counts the number of unique resources that have at least one violation
+func (r *Reporter) countResourcesWithViolations(violations []types.PolicyViolation) int {
+	resourcesWithViolations := make(map[string]bool)
+	for _, violation := range violations {
+		resourcesWithViolations[violation.ResourceID] = true
+	}
+	return len(resourcesWithViolations)
 }
 
 // Format returns the format this reporter outputs

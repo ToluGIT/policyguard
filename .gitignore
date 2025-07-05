@@ -51,3 +51,6 @@ full_scan_report.txt
 
 # Local test binary
 policyguard
+
+# RELEASE GUIDE
+.github/RELEASE_GUIDE.md

@@ -1,100 +1,44 @@
-# PolicyGuard Integration Tests
+# Integration Tests
 
-This directory contains integration tests that verify the complete PolicyGuard pipeline from parsing Terraform files to generating security reports.
+This directory contains integration tests for PolicyGuard that verify the complete pipeline from parsing to reporting.
 
-## Test Coverage
+## Quick Start
 
-The integration tests cover:
-
-1. **Full Pipeline Testing**
-   - Parsing Terraform configurations
-   - Loading and evaluating OPA policies
-   - Generating reports in multiple formats
-   - Verifying correct violation detection
-
-2. **CLI Command Testing**
-   - `scan` command with various options
-   - `validate` command for policy validation
-   - `policy list` and `policy show` commands
-   - Error handling and edge cases
-
-3. **Component Integration**
-   - Analyzer component integration
-   - Parser, Policy Engine, and Reporter working together
-   - Concurrent analysis of multiple files
-
-4. **Performance Testing**
-   - Large file analysis
-   - Concurrent processing
-   - Resource usage
-
-## Running Tests
-
-### Run all integration tests:
 ```bash
+# Run all integration tests
 make integration-test
-```
 
-### Run specific test:
-```bash
+# Run specific integration test
 go test -v -tags=integration -run TestFullPipeline ./tests/integration/
-```
 
-### Run with coverage:
-```bash
+# Run with coverage
 go test -v -tags=integration -cover ./tests/integration/
 ```
 
-### Run all tests (unit + integration):
-```bash
-make test-all
-```
+## What's Tested
 
-## Test Data
-
-The `testdata/` directory contains:
-
-- **terraform/**: Sample Terraform configurations
-  - `secure.tf`: Configuration with no violations
-  - `insecure.tf`: Configuration with multiple security issues
-  
-- **policies/**: Test policies
-  - `test_policy.rego`: Simple policy for testing
+- **Full Pipeline**: Terraform/OpenTofu parsing → Policy evaluation → Report generation
+- **CLI Commands**: `scan`, `validate`, `policy list/show`
+- **Output Formats**: Human, JSON, SARIF, JUnit
+- **Error Handling**: Invalid files, missing policies, edge cases
+- **Performance**: Large files, concurrent processing
 
 ## Test Structure
 
-- **TestFullPipeline**: Tests the complete analysis pipeline
-- **TestCLIScanCommand**: Tests the CLI scan command
-- **TestCLIValidateCommand**: Tests policy validation
-- **TestCLIPolicyCommands**: Tests policy management commands
-- **TestAnalyzerIntegration**: Tests the analyzer component
-- **TestConcurrentAnalysis**: Tests concurrent file analysis
-- **TestPerformance**: Tests performance with large files
+- **integration_test.go**: Main integration test file
+- **testdata/**: Test data (Terraform files, policies)
+- **run_tests.sh**: Test runner script
 
-## Adding New Tests
+## Complete Testing Guide
 
-To add a new integration test:
+📖 **For comprehensive testing documentation, see the main [TESTING.md](../../TESTING.md) file in the project root.**
 
-1. Create test data files in `testdata/`
-2. Add test function with `Test` prefix
-3. Use the build tag `// +build integration`
-4. Test both success and failure scenarios
-
-Example:
-```go
-func TestNewFeature(t *testing.T) {
-    // Test implementation
-}
-```
-
-## Debugging
-
-To see detailed output:
-```bash
-go test -v -tags=integration ./tests/integration/
-```
-
-To run a specific test with more verbosity:
-```bash
-go test -v -tags=integration -run TestCLIScanCommand ./tests/integration/
-```
+That document covers:
+- Unit testing
+- Integration testing  
+- Manual testing
+- Error handling & logging
+- Performance testing
+- Coverage reports
+- CI/CD testing
+- Adding new tests

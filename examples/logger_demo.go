@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -9,7 +11,8 @@ import (
 )
 
 func main() {
-	fmt.Println("=== PolicyGuard Logger Demo ===\n")
+	fmt.Println("=== PolicyGuard Logger Demo ===")
+	fmt.Println()
 	
 	// Create default logger
 	log := logger.Default()
