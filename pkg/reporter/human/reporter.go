@@ -82,7 +82,7 @@ func (r *Reporter) Write(ctx context.Context, report *types.Report, writer io.Wr
 
 	// No violations found
 	if len(report.Violations) == 0 {
-		fmt.Fprintf(writer, "✅ No security violations found!\n\n")
+		fmt.Fprintf(writer, "No security violations found!\n\n")
 		return nil
 	}
 

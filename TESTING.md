@@ -53,31 +53,31 @@ go test ./pkg/reporter/human -v -cover
 ### Current Unit Test Coverage
 
 - **Parser (Terraform)**: 70.8% coverage
-  - ✅ Parsing S3 buckets, EC2 instances, security groups
-  - ✅ OpenTofu support (.tofu and .tofu.json files)
-  - ✅ Error handling for invalid HCL
-  - ✅ Directory parsing
+  - Parsing S3 buckets, EC2 instances, security groups
+  - OpenTofu support (.tofu and .tofu.json files)
+  - Error handling for invalid HCL
+  - Directory parsing
 
 - **Analyzer**: 90.5% coverage
-  - ✅ File and directory analysis
-  - ✅ Error handling scenarios
-  - ✅ Component integration
+  - File and directory analysis
+  - Error handling scenarios
+  - Component integration
 
 - **Logger**: 50.7% coverage
-  - ✅ Log level filtering
-  - ✅ Formatted output
-  - ✅ Component-specific loggers with prefixes
-  - ✅ Log level parsing
+  - Log level filtering
+  - Formatted output
+  - Component-specific loggers with prefixes
+  - Log level parsing
 
 - **Reporter (Human)**: 28.8% coverage
-  - ✅ Pass rate calculation
-  - ✅ Report generation
-  - ✅ Resource violation counting
+  - Pass rate calculation
+  - Report generation
+  - Resource violation counting
 
 - **Reporter (JSON)**: 77.3% coverage
-  - ✅ JSON output formatting
-  - ✅ Pass rate calculation
-  - ✅ Violation summarization
+  - JSON output formatting
+  - Pass rate calculation
+  - Violation summarization
 
 ## Integration Testing
 
