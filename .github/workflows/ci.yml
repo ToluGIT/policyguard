@@ -51,19 +51,19 @@ jobs:
     - name: Run tests
       shell: bash
       run: |
-        go test -v -race -coverprofile=coverage.out $(go list ./... | grep -v /examples)
+        go test -v -race -coverprofile=coverage-${{ matrix.os }}-${{ matrix.go-version }}.out $(go list ./... | grep -v /examples)
     
     - name: Generate coverage report
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
       run: |
-        go tool cover -html=coverage.out -o coverage.html
-        go tool cover -func=coverage.out
+        go tool cover -html=coverage-${{ matrix.os }}-${{ matrix.go-version }}.out -o coverage.html
+        go tool cover -func=coverage-${{ matrix.os }}-${{ matrix.go-version }}.out
     
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
       uses: codecov/codecov-action@v3
       with:
-        file: ./coverage.out
+        file: ./coverage-${{ matrix.os }}-${{ matrix.go-version }}.out
         flags: unittests
         name: codecov-umbrella
 
@@ -88,7 +88,7 @@ jobs:
     #     args: --timeout=5m
     
     - name: Install gosec
-      run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+      run: go install github.com/securego/gosec/v2/cmd/gosec@latest
     
     - name: Run gosec Security Scanner
       run: |

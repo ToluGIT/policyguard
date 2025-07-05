@@ -52,7 +52,7 @@ jobs:
         go tool cover -html=coverage.out -o coverage.html
     
     - name: Install gosec
-      run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+      run: go install github.com/securego/gosec/v2/cmd/gosec@latest
     
     - name: Run security scan with gosec
       run: |
