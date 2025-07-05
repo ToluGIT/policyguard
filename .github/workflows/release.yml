@@ -1,0 +1,303 @@
+name: Release and Publish
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v1.2.3-beta.1
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write  # Required for creating releases
+  packages: write  # Required for publishing to GitHub Packages
+  issues: write    # Required for release notes
+  pull-requests: write
+
+jobs:
+  build-and-test:
+    name: Build, Test & Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for proper versioning
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        check-latest: true
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Verify dependencies
+      run: go mod verify
+    
+    - name: Run tests
+      run: |
+        go test -v -race -coverprofile=coverage.out ./...
+        go tool cover -html=coverage.out -o coverage.html
+    
+    - name: Install gosec
+      run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+    
+    - name: Run security scan with gosec
+      run: |
+        gosec -fmt sarif -out gosec-results.sarif ./...
+    
+    - name: Upload security scan results
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: gosec-results.sarif
+        category: gosec
+    
+    - name: Build binaries for multiple platforms
+      run: |
+        # Set version info from git tag
+        VERSION=${GITHUB_REF#refs/tags/v}
+        COMMIT=$(git rev-parse --short HEAD)
+        DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        
+        # Build flags with version info
+        LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE} -s -w"
+        
+        # Create build directory
+        mkdir -p build
+        
+        # Build for different platforms
+        GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o build/policyguard-linux-amd64 ./cmd/policyguard
+        GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o build/policyguard-linux-arm64 ./cmd/policyguard
+        GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o build/policyguard-darwin-amd64 ./cmd/policyguard
+        GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o build/policyguard-darwin-arm64 ./cmd/policyguard
+        GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o build/policyguard-windows-amd64.exe ./cmd/policyguard
+        
+        # Make binaries executable
+        chmod +x build/policyguard-*
+        
+        # Create checksums
+        cd build
+        sha256sum * > checksums.txt
+        cd ..
+    
+    - name: Self-test with built binary
+      run: |
+        # Test the Linux binary on our examples
+        ./build/policyguard-linux-amd64 validate policies/
+        ./build/policyguard-linux-amd64 scan examples/terraform/insecure_s3.tf --fail-on-error || echo "Expected to find violations"
+        ./build/policyguard-linux-amd64 scan examples/opentofu/s3_insecure.tofu --fail-on-error || echo "Expected to find violations"
+        
+        # Test policy listing
+        ./build/policyguard-linux-amd64 policy list
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries
+        path: build/
+        retention-days: 30
+    
+    - name: Upload test coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: |
+          coverage.out
+          coverage.html
+
+  publish-github-packages:
+    name: Publish to GitHub Packages
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Configure Git for Go modules
+      run: |
+        git config --global user.email "action@github.com"
+        git config --global user.name "GitHub Action"
+    
+    - name: Setup Go module proxy authentication
+      run: |
+        echo "GOPRIVATE=github.com/${{ github.repository }}" >> $GITHUB_ENV
+        echo "GOPROXY=https://proxy.golang.org,direct" >> $GITHUB_ENV
+        
+        # Configure git to use GitHub token for private repos if needed
+        git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com".insteadOf "https://github.com"
+    
+    - name: Create and push module version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "Publishing version: $VERSION"
+        
+        # Ensure the tag is annotated and pushed
+        git tag -f -a "$VERSION" -m "Release $VERSION"
+        git push origin "$VERSION" || echo "Tag already exists remotely"
+        
+        # The Go module proxy will automatically pick up the version from the git tag
+        echo "Go module version $VERSION is now available at:"
+        echo "go install github.com/${{ github.repository }}/cmd/policyguard@$VERSION"
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-and-test, publish-github-packages]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: binaries
+        path: build/
+    
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        echo "##  What's New in v${VERSION}" > release_notes.md
+        echo "" >> release_notes.md
+        
+        if [ -n "$PREVIOUS_TAG" ]; then
+          echo "###  Changes since $PREVIOUS_TAG" >> release_notes.md
+          echo "" >> release_notes.md
+          
+          # Get commits since last tag
+          git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges >> release_notes.md
+          echo "" >> release_notes.md
+        fi
+        
+        echo "" >> release_notes.md
+        echo "### Installation" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "#### Go Install (Recommended)" >> release_notes.md
+        echo '```bash' >> release_notes.md
+        echo "go install github.com/${{ github.repository }}/cmd/policyguard@v${VERSION}" >> release_notes.md
+        echo '```' >> release_notes.md
+        echo "" >> release_notes.md
+        echo "#### Direct Download" >> release_notes.md
+        echo "Download the appropriate binary for your platform from the assets below." >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Usage" >> release_notes.md
+        echo '```bash' >> release_notes.md
+        echo "# Scan Terraform files" >> release_notes.md
+        echo "policyguard scan path/to/terraform/" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Scan OpenTofu files" >> release_notes.md
+        echo "policyguard scan path/to/opentofu/" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# Validate policies" >> release_notes.md
+        echo "policyguard validate policies/" >> release_notes.md
+        echo '```' >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Security" >> release_notes.md
+        echo "All binaries are built with security hardening and have been scanned for vulnerabilities." >> release_notes.md
+        echo "Checksums are provided in \`checksums.txt\`." >> release_notes.md
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: "PolicyGuard v${{ github.ref_name }}"
+        body_path: release_notes.md
+        files: |
+          build/policyguard-linux-amd64
+          build/policyguard-linux-arm64
+          build/policyguard-darwin-amd64
+          build/policyguard-darwin-arm64
+          build/policyguard-windows-amd64.exe
+          build/checksums.txt
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+        generate_release_notes: true
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-documentation:
+    name: Update Documentation
+    needs: create-release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Update installation docs
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        
+        # Update README with latest version
+        sed -i "s/policyguard@v[0-9]\+\.[0-9]\+\.[0-9]\+/policyguard@v${VERSION}/g" README.md || true
+        sed -i "s/policyguard@latest/policyguard@v${VERSION}/g" README.md || true
+        
+        # Update any installation scripts
+        find . -name "*.sh" -exec sed -i "s/policyguard@v[0-9]\+\.[0-9]\+\.[0-9]\+/policyguard@v${VERSION}/g" {} \; || true
+    
+    - name: Create Pull Request for documentation updates
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "docs: update installation instructions for v${{ github.ref_name }}"
+        title: " Update documentation for v${{ github.ref_name }}"
+        body: |
+          This PR updates the documentation to reference the latest release v${{ github.ref_name }}.
+          
+          Changes:
+          - Updated installation commands in README.md
+          - Updated version references in scripts
+          
+          Auto-generated by the release workflow.
+        branch: docs/update-v${{ github.ref_name }}
+        delete-branch: true
+
+  # Notify on successful release
+  notify:
+    name: Notify Release Success
+    needs: [create-release, update-documentation]
+    runs-on: ubuntu-latest
+    if: always() && startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Notify success
+      if: needs.create-release.result == 'success'
+      run: |
+        echo " Release ${{ github.ref_name }} published successfully!"
+        echo " Go module: github.com/${{ github.repository }}/cmd/policyguard@${{ github.ref_name }}"
+        echo " Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+    
+    - name: Notify failure
+      if: needs.create-release.result == 'failure' || needs.publish-github-packages.result == 'failure'
+      run: |
+        echo " Release ${{ github.ref_name }} failed!"
+        echo "Please check the workflow logs and try again."
+        exit 1

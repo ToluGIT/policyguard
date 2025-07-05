@@ -68,9 +68,9 @@ jobs:
     - name: Check Fail on Error worked
       run: |
         if [ "${{ steps.fail_test.outcome }}" == "failure" ]; then
-          echo "✅ Fail on error worked correctly (found violations)"
+          echo " Fail on error worked correctly (found violations)"
         else
-          echo "❌ Fail on error did not work as expected"
+          echo " Fail on error did not work as expected"
           exit 1
         fi
     

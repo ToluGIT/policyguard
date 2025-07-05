@@ -1,0 +1,192 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, master, develop, feature/* ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go-version: ['1.21', '1.22']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+        check-latest: true
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Verify dependencies
+      run: go mod verify
+    
+    - name: Run tests
+      run: |
+        go test -v -race -coverprofile=coverage.out ./...
+    
+    - name: Generate coverage report
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
+      run: |
+        go tool cover -html=coverage.out -o coverage.html
+        go tool cover -func=coverage.out
+    
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+
+  lint:
+    name: Lint and Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m
+    
+    - name: Install gosec
+      run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+    
+    - name: Run gosec Security Scanner
+      run: |
+        gosec -fmt sarif -out gosec-results.sarif ./...
+    
+    - name: Upload SARIF file
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: gosec-results.sarif
+
+  build:
+    name: Build Test
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Build for multiple platforms
+      run: |
+        # Test builds for different platforms
+        GOOS=linux GOARCH=amd64 go build -o build/linux-amd64/policyguard ./cmd/policyguard
+        GOOS=linux GOARCH=arm64 go build -o build/linux-arm64/policyguard ./cmd/policyguard
+        GOOS=darwin GOARCH=amd64 go build -o build/darwin-amd64/policyguard ./cmd/policyguard
+        GOOS=darwin GOARCH=arm64 go build -o build/darwin-arm64/policyguard ./cmd/policyguard
+        GOOS=windows GOARCH=amd64 go build -o build/windows-amd64/policyguard.exe ./cmd/policyguard
+    
+    - name: Test built binary
+      run: |
+        chmod +x build/linux-amd64/policyguard
+        ./build/linux-amd64/policyguard --version
+        ./build/linux-amd64/policyguard --help
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Build binary
+      run: go build -o policyguard ./cmd/policyguard
+    
+    - name: Run integration tests
+      run: |
+        chmod +x policyguard
+        
+        # Test policy validation
+        ./policyguard validate policies/
+        
+        # Test Terraform scanning
+        ./policyguard scan examples/terraform/insecure_s3.tf > terraform_results.txt
+        if ! grep -q "VIOLATIONS FOUND" terraform_results.txt; then
+          echo "Expected to find violations in insecure Terraform file"
+          exit 1
+        fi
+        
+        # Test OpenTofu scanning
+        ./policyguard scan examples/opentofu/s3_insecure.tofu > opentofu_results.txt
+        if ! grep -q "VIOLATIONS FOUND" opentofu_results.txt; then
+          echo "Expected to find violations in insecure OpenTofu file"
+          exit 1
+        fi
+        
+        # Test different output formats
+        ./policyguard scan examples/terraform/insecure_s3.tf -f json > results.json
+        ./policyguard scan examples/terraform/insecure_s3.tf -f sarif > results.sarif
+        ./policyguard scan examples/terraform/insecure_s3.tf -f junit > results.xml
+        
+        # Verify output files are valid
+        jq . results.json > /dev/null
+        grep -q "version.*2.1.0" results.sarif
+        grep -q "testcase" results.xml
+        
+        # Test policy listing
+        ./policyguard policy list
+        ./policyguard policy show s3_bucket_encryption
+    
+    - name: Upload integration test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: integration-test-results
+        path: |
+          terraform_results.txt
+          opentofu_results.txt
+          results.json
+          results.sarif
+          results.xml
