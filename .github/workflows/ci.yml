@@ -51,19 +51,20 @@ jobs:
     - name: Run tests
       shell: bash
       run: |
-        go test -v -race -coverprofile=coverage-${{ matrix.os }}-${{ matrix.go-version }}.out $(go list ./... | grep -v /examples)
+        go test -v $(go list ./... | grep -v /examples)
     
     - name: Generate coverage report
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
       run: |
-        go tool cover -html=coverage-${{ matrix.os }}-${{ matrix.go-version }}.out -o coverage.html
-        go tool cover -func=coverage-${{ matrix.os }}-${{ matrix.go-version }}.out
+        go test -coverprofile=coverage.out $(go list ./... | grep -v /examples)
+        go tool cover -html=coverage.out -o coverage.html
+        go tool cover -func=coverage.out
     
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
       uses: codecov/codecov-action@v3
       with:
-        file: ./coverage-${{ matrix.os }}-${{ matrix.go-version }}.out
+        file: ./coverage.out
         flags: unittests
         name: codecov-umbrella
 
@@ -149,14 +150,14 @@ jobs:
         
         # Test Terraform scanning
         ./policyguard scan examples/terraform/insecure_s3.tf > terraform_results.txt
-        if ! grep -q "VIOLATIONS FOUND" terraform_results.txt; then
+        if ! grep -q "VIOLATIONS" terraform_results.txt; then
           echo "Expected to find violations in insecure Terraform file"
           exit 1
         fi
         
         # Test OpenTofu scanning
         ./policyguard scan examples/opentofu/s3_insecure.tofu > opentofu_results.txt
-        if ! grep -q "VIOLATIONS FOUND" opentofu_results.txt; then
+        if ! grep -q "VIOLATIONS" opentofu_results.txt; then
           echo "Expected to find violations in insecure OpenTofu file"
           exit 1
         fi

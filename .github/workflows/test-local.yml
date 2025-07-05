@@ -29,25 +29,25 @@ jobs:
     - name: Test Human Format
       run: |
         echo "=== Testing Human Format ==="
-        ./policyguard scan examples/terraform/1.tf
+        ./policyguard scan examples/terraform/insecure_complete.tf
     
     - name: Test JSON Format
       run: |
         echo "=== Testing JSON Format ==="
-        ./policyguard scan examples/terraform/1.tf -f json -o results.json
+        ./policyguard scan examples/terraform/insecure_complete.tf -f json -o results.json
         cat results.json | jq .summary
     
     - name: Test SARIF Format
       run: |
         echo "=== Testing SARIF Format ==="
-        ./policyguard scan examples/terraform/1.tf -f sarif -o results.sarif
+        ./policyguard scan examples/terraform/insecure_complete.tf -f sarif -o results.sarif
         # Validate SARIF format
         cat results.sarif | jq '.version, .runs[0].tool.driver.name'
     
     - name: Test JUnit Format
       run: |
         echo "=== Testing JUnit Format ==="
-        ./policyguard scan examples/terraform/1.tf -f junit -o results.xml
+        ./policyguard scan examples/terraform/insecure_complete.tf -f junit -o results.xml
         # Display first few lines
         head -20 results.xml
     
@@ -62,7 +62,7 @@ jobs:
       continue-on-error: true
       run: |
         echo "=== Testing Fail on Error ==="
-        ./policyguard scan examples/terraform/1.tf --fail-on-error
+        ./policyguard scan examples/terraform/insecure_complete.tf --fail-on-error
         echo "Exit code: $?"
     
     - name: Check Fail on Error worked
