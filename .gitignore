@@ -54,3 +54,5 @@ policyguard
 
 # RELEASE GUIDE
 .github/RELEASE_GUIDE.md
+
+.github/workflows/test-local.yml
