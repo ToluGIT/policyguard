@@ -53,7 +53,7 @@ sudo mv policyguard /usr/local/bin/
 ### Using Go Install
 
 ```bash
-go install github.com/ToluGIT/policyguard/cmd/policyguard@v0.2.0
+go install github.com/ToluGIT/policyguard/cmd/policyguard@v0.3.0
 ```
 
 ### Prerequisites
@@ -70,10 +70,10 @@ policyguard scan main.tf
 
 2. **Scan an OpenTofu file**:
 ```bash
-policyguard scan main.tofu/tf
+policyguard scan main.tf/tf
 ```
 
-3. **Scan a directory (supports both .tf and .tofu files)**:
+3. **Scan a directory supports .tf**:
 ```bash
 policyguard scan ./infrastructure
 ```
@@ -119,7 +119,7 @@ When analyzing your code, the parser extracts variable definitions and attempts 
 policyguard scan vpc.tf
 
 # Scan OpenTofu files
-policyguard scan vpc.tofu
+policyguard scan vpc.tf
 
 # Scan multiple files .tf 
 policyguard scan *.tf 
