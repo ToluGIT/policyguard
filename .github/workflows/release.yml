@@ -264,7 +264,7 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         commit-message: "docs: update installation instructions for ${{ github.ref_name }}"
-        title: "📚 Update documentation for ${{ github.ref_name }}"
+        title: " Update documentation for ${{ github.ref_name }}"
         body: |
           This PR updates the documentation to reference the latest release ${{ github.ref_name }}.
           

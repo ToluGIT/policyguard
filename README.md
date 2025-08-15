@@ -10,7 +10,7 @@ PolicyGuard is a security policy engine for Infrastructure as Code (IaC) that he
 
 ## Features
 
-- **Terraform & OpenTofu Support**: Parse both Terraform (.tf, .tf.json) and OpenTofu (.tofu, .tofu.json) configuration files
+- **Terraform & OpenTofu Support**: Parse both Terraform and OpenTofu  configuration files
 - **Policy Evaluation**: Evaluate resources against security policies using OPA
 - **Multiple Output Formats**: Human-readable, JSON, JUnit, and SARIF formats
 - **Customizable Policies**: Write your own policies in Rego
@@ -67,7 +67,7 @@ policyguard scan main.tf
 
 2. **Scan an OpenTofu file**:
 ```bash
-policyguard scan main.tofu
+policyguard scan main.tofu/tf
 ```
 
 3. **Scan a directory (supports both .tf and .tofu files)**:
