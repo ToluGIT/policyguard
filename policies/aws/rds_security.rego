@@ -22,11 +22,30 @@ deny[violation] {
     }
 }
 
+# Deny RDS instances without encryption - special case for module variables
+deny[violation] {
+    resource := input.resource
+    resource.type == "aws_db_instance"
+    
+    # Check for _security_unencrypted marker set by enhanced parser
+    resource.attributes._security_unencrypted == true
+    
+    violation := {
+        "id": sprintf("rds-no-encryption-module-%s", [resource.name]),
+        "policy_id": "rds_encryption_required_module",
+        "severity": "high",
+        "message": sprintf("RDS instance '%s' does not have encryption enabled (module variable)", [resource.name]),
+        "details": "RDS instances should have encryption enabled to protect data at rest, even when set through module variables",
+        "remediation": "Set storage_encrypted = true in module arguments and optionally specify kms_key_id"
+    }
+}
+
 # Deny RDS instances with public access
 deny[violation] {
     resource := input.resource
     resource.type == "aws_db_instance"
     
+    # Check direct attribute value
     resource.attributes.publicly_accessible == true
     
     violation := {
@@ -36,6 +55,24 @@ deny[violation] {
         "message": sprintf("RDS instance '%s' is publicly accessible", [resource.name]),
         "details": "RDS instances should not be directly accessible from the internet",
         "remediation": "Set publicly_accessible = false and use VPN or bastion hosts for access"
+    }
+}
+
+# Deny RDS instances with public access - special case for module variables
+deny[violation] {
+    resource := input.resource
+    resource.type == "aws_db_instance"
+    
+    # Check for security_publicly_accessible marker set by enhanced parser
+    resource.attributes._security_publicly_accessible == true
+    
+    violation := {
+        "id": sprintf("rds-public-access-module-%s", [resource.name]),
+        "policy_id": "rds_no_public_access_module",
+        "severity": "critical",
+        "message": sprintf("RDS instance '%s' is publicly accessible (module variable)", [resource.name]),
+        "details": "RDS instances should not be directly accessible from the internet, even when set through module variables",
+        "remediation": "Set publicly_accessible = false in module arguments and use VPN or bastion hosts for access"
     }
 }
 
@@ -53,6 +90,24 @@ deny[violation] {
         "message": sprintf("RDS instance '%s' has backups disabled", [resource.name]),
         "details": "RDS instances should have automated backups enabled",
         "remediation": "Set backup_retention_period to at least 7 days"
+    }
+}
+
+# Deny RDS instances without backup - special case for module variables
+deny[violation] {
+    resource := input.resource
+    resource.type == "aws_db_instance"
+    
+    # Check for _security_no_backup marker set by enhanced parser
+    resource.attributes._security_no_backup == true
+    
+    violation := {
+        "id": sprintf("rds-no-backup-module-%s", [resource.name]),
+        "policy_id": "rds_backup_required_module",
+        "severity": "high",
+        "message": sprintf("RDS instance '%s' has backups disabled (module variable)", [resource.name]),
+        "details": "RDS instances should have automated backups enabled, even when set through module variables",
+        "remediation": "Set backup_retention_period to at least 7 days in module arguments"
     }
 }
 
@@ -125,6 +180,24 @@ deny[violation] {
         "message": sprintf("RDS instance '%s' does not have IAM authentication enabled", [resource.name]),
         "details": "IAM database authentication provides additional security for database access",
         "remediation": "Set iam_database_authentication_enabled = true"
+    }
+}
+
+# Deny RDS instances without IAM authentication - special case for module variables
+deny[violation] {
+    resource := input.resource
+    resource.type == "aws_db_instance"
+    
+    # Check for _security_no_iam_auth marker set by enhanced parser
+    resource.attributes._security_no_iam_auth == true
+    
+    violation := {
+        "id": sprintf("rds-no-iam-auth-module-%s", [resource.name]),
+        "policy_id": "rds_iam_authentication_module",
+        "severity": "medium",
+        "message": sprintf("RDS instance '%s' does not have IAM authentication enabled (module variable)", [resource.name]),
+        "details": "IAM database authentication provides additional security for database access, even when set through module variables",
+        "remediation": "Set iam_database_authentication_enabled = true in module arguments"
     }
 }
 

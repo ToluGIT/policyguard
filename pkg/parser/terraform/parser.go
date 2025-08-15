@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/ToluGIT/policyguard/pkg/logger"
 	"github.com/ToluGIT/policyguard/pkg/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -22,6 +23,7 @@ type Parser struct {
 	variables  map[string]cty.Value      // Store extracted variables
 	functions  map[string]function.Function // Standard Terraform functions
 	evalContext *hcl.EvalContext       // Evaluation context for variables and functions
+	log       *logger.Logger          // Logger for debug output
 }
 
 // New creates a new Terraform parser
@@ -35,11 +37,18 @@ func New() *Parser {
 			Variables: make(map[string]cty.Value),
 			Functions: make(map[string]function.Function),
 		},
+		log: logger.Default(),
 	}
 	
 	// Initialize the evaluation context
 	p.initEvalContext()
 	
+	return p
+}
+
+// WithLogger sets a custom logger for the parser
+func (p *Parser) WithLogger(log *logger.Logger) *Parser {
+	p.log = log
 	return p
 }
 
@@ -90,7 +99,7 @@ func (p *Parser) Parse(ctx context.Context, filePath string) ([]types.Resource, 
 		err = p.extractVariablesFromFile(file, filePath)
 		if err != nil {
 			// Log warning but continue with parsing
-			fmt.Printf("Warning: Error extracting variables from %s: %v\n", filePath, err)
+			p.log.Warn("Error extracting variables from %s: %v", filePath, err)
 		}
 		// Update evaluation context
 		p.updateEvalContext()
@@ -126,7 +135,7 @@ func (p *Parser) ParseDirectory(ctx context.Context, dirPath string) ([]types.Re
 	err := p.extractVariables(ctx, allFiles)
 	if err != nil {
 		// Log warning but continue with parsing
-		fmt.Printf("Warning: Error extracting variables: %v\n", err)
+		p.log.Warn("Error extracting variables: %v", err)
 	}
 	
 	var allResources []types.Resource
@@ -154,7 +163,7 @@ func (p *Parser) ParseDirectory(ctx context.Context, dirPath string) ([]types.Re
 	resolvedModuleResources, err := p.resolveModules(ctx, moduleResources, dirPath)
 	if err != nil {
 		// Log the error but don't fail the entire parsing
-		fmt.Printf("Warning: Error resolving modules: %v\n", err)
+		p.log.Warn("Error resolving modules: %v", err)
 	}
 	
 	// Add resolved module resources to the result
@@ -239,7 +248,7 @@ func (p *Parser) extractVariablesFromFile(file *hcl.File, filePath string) error
 				varValue, err := p.extractVariableFromHCLBlock(block)
 				if err != nil {
 					// Log and continue
-					fmt.Printf("Warning: Failed to extract variable %s: %v\n", varName, err)
+					p.log.Warn("Failed to extract variable %s: %v", varName, err)
 					continue
 				}
 				
@@ -267,7 +276,7 @@ func (p *Parser) extractVariablesFromFile(file *hcl.File, filePath string) error
 			varValue, err := p.extractVariableFromJSONBlock(block)
 			if err != nil {
 				// Log and continue
-				fmt.Printf("Warning: Failed to extract variable %s from JSON: %v\n", varName, err)
+				p.log.Warn("Failed to extract variable %s from JSON: %v", varName, err)
 				continue
 			}
 			
@@ -327,13 +336,7 @@ func (p *Parser) updateEvalContext() {
 	for k, v := range p.variables {
 		varMap[k] = v
 		
-		// Debug: Print extracted variables
-		val, err := p.ctyValueToGo(v)
-		if err == nil {
-			fmt.Printf("DEBUG: Extracted variable %s = %v\n", k, val)
-		} else {
-			fmt.Printf("DEBUG: Extracted variable %s (error converting: %v)\n", k, err)
-		}
+		// No debug output for extracted variables - disabled to prevent verbosity
 	}
 	
 	// Only create the object if we have variables
@@ -341,7 +344,7 @@ func (p *Parser) updateEvalContext() {
 		// Try to create the object value
 		objectVal, err := cty.ObjectVal(varMap), error(nil)
 		if err != nil {
-			fmt.Printf("Warning: Error creating variable object: %v\n", err)
+			p.log.Warn("Error creating variable object: %v", err)
 			// Individual variables will not be accessible via var.name
 		} else {
 			vars["var"] = objectVal
@@ -361,8 +364,127 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 		source, ok := module.Attributes["source"].(string)
 		if !ok || source == "" {
 			// Skip modules without a valid source
+			p.log.Warn("Module %s has no source attribute, skipping", module.Name)
 			continue
 		}
+		
+		// Extract module variables from attributes
+		moduleVars := make(map[string]interface{})
+		securityCriticalVars := make(map[string]interface{})
+		
+		// First pass: collect all module variables
+		for key, val := range module.Attributes {
+			if key != "source" && !strings.HasPrefix(key, "_") {
+				moduleVars[key] = val
+			}
+		}
+		
+		// Second pass: identify security-critical variables and create markers
+		for key, val := range moduleVars {
+			// Track security-critical variables separately for direct propagation
+			if p.isSecurityCriticalVariable(key, val) {
+				securityCriticalVars[key] = val
+				p.log.Debug("Found security-critical variable %s in module %s", key, module.Name)
+				
+				// Process conditional expressions specially
+				if condMap, isCond := val.(map[string]interface{}); isCond && 
+				   condMap["_type"] == "conditional_expression" {
+					
+					// Get the security value for conditional expressions
+					if secVal, hasSec := condMap["_security_value"]; hasSec {
+						// Special handling based on variable name and value
+						switch key {
+						case "publicly_accessible":
+							if bVal, isBool := secVal.(bool); isBool && bVal {
+								securityCriticalVars["_security_publicly_accessible"] = true
+								p.log.Debug("Found insecure conditional value for publicly_accessible in module %s", module.Name)
+							}
+						case "storage_encrypted":
+							if bVal, isBool := secVal.(bool); isBool && !bVal {
+								securityCriticalVars["_security_unencrypted"] = true
+								p.log.Debug("Found insecure conditional value for storage_encrypted in module %s", module.Name)
+							}
+						case "iam_database_authentication_enabled":
+							if bVal, isBool := secVal.(bool); isBool && !bVal {
+								securityCriticalVars["_security_no_iam_auth"] = true
+							}
+						case "deletion_protection":
+							if bVal, isBool := secVal.(bool); isBool && !bVal {
+								securityCriticalVars["_security_no_deletion_protection"] = true
+							}
+						case "backup_retention_period":
+							if numVal, isNum := secVal.(float64); isNum && numVal == 0 {
+								securityCriticalVars["_security_no_backup"] = true
+							}
+						}
+					}
+					continue // Already handled conditional expression
+				}
+				
+				// For explicit boolean security settings, pre-process for policy detection
+				if boolVal, isBool := val.(bool); isBool {
+					switch key {
+					case "publicly_accessible":
+						if boolVal { // true is insecure
+							securityCriticalVars["_security_publicly_accessible"] = true
+							p.log.Debug("Found publicly_accessible=true in module %s", module.Name)
+						}
+					case "storage_encrypted":
+						if !boolVal { // false is insecure
+							securityCriticalVars["_security_unencrypted"] = true
+							p.log.Debug("Found storage_encrypted=false in module %s", module.Name)
+						}
+					case "iam_database_authentication_enabled":
+						if !boolVal { // false is insecure
+							securityCriticalVars["_security_no_iam_auth"] = true
+							p.log.Debug("Found iam_database_authentication_enabled=false in module %s", module.Name)
+						}
+					case "deletion_protection":
+						if !boolVal { // false is insecure
+							securityCriticalVars["_security_no_deletion_protection"] = true
+							p.log.Debug("Found deletion_protection=false in module %s", module.Name)
+						}
+					}
+				}
+				
+				// Handle numeric values like backup_retention_period
+				if numVal, isNum := val.(float64); isNum {
+					if key == "backup_retention_period" && numVal == 0 {
+						securityCriticalVars["_security_no_backup"] = true
+						p.log.Debug("Found backup_retention_period=0 in module %s", module.Name)
+					}
+				}
+				
+				// Handle slices like enabled_cloudwatch_logs_exports
+				if arr, isArr := val.([]interface{}); isArr {
+					if key == "enabled_cloudwatch_logs_exports" && len(arr) == 0 {
+						securityCriticalVars["_security_no_log_exports"] = true
+						p.log.Debug("Found empty enabled_cloudwatch_logs_exports in module %s", module.Name)
+					}
+				}
+				
+				// Handle variable references
+				if varRef, isStr := val.(string); isStr && strings.HasPrefix(varRef, "[var.") {
+					varName := strings.TrimPrefix(strings.TrimSuffix(varRef, "]"), "[var.")
+					p.log.Debug("Found variable reference %s in module variable %s", varName, key)
+					
+					// Handle common patterns for conditional security variables
+					if key == "publicly_accessible" && strings.Contains(varRef, "!var.") {
+						// Likely a negated boolean variable like !var.production_mode which is insecure
+						securityCriticalVars["_security_publicly_accessible"] = true
+						p.log.Debug("Detected likely insecure pattern: negated variable for publicly_accessible in module %s", module.Name)
+					} else if key == "storage_encrypted" && strings.Contains(varRef, "var.") {
+						// Assume a variable without negation is potentially insecure for storage_encrypted
+						securityCriticalVars["_security_unencrypted"] = true
+						p.log.Debug("Detected potentially insecure pattern: variable reference for storage_encrypted in module %s", module.Name)
+					}
+				}
+			}
+		}
+		
+		// Log module parsing information
+		p.log.Debug("Processing module %s with source %s", module.Name, source)
+		p.log.Debug("Module %s has %d security markers", module.Name, len(securityCriticalVars))
 		
 		// Handle local modules (starting with ./ or ../)
 		if strings.HasPrefix(source, "./") || strings.HasPrefix(source, "../") {
@@ -371,38 +493,116 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 			
 			// Check if the path exists
 			if _, err := os.Stat(modulePath); os.IsNotExist(err) {
-				// Module path doesn't exist, skip
+				// Module path doesn't exist, log and skip
+				p.log.Warn("Module path does not exist: %s", modulePath)
 				continue
 			}
 			
-			// Parse module directory
-			resources, err := p.ParseModuleDirectory(ctx, modulePath, module.Name)
+			p.log.Debug("Found module at path: %s", modulePath)
+			
+			// Create a special security map to pass to the module parser
+			// that contains BOTH the original variables and the enhanced security markers
+			enhancedSecurityVars := make(map[string]interface{})
+			
+			// Copy all security-critical variables
+			for k, v := range securityCriticalVars {
+				enhancedSecurityVars[k] = v
+			}
+			
+			// Copy security-relevant original variables as well
+			for k, v := range moduleVars {
+				if p.isSecurityCriticalVariable(k, v) {
+					enhancedSecurityVars[k] = v
+				}
+			}
+			
+			// Parse module directory with variables and pre-processed security attributes
+			resources, err := p.ParseModuleWithVars(ctx, modulePath, module.Name, moduleVars, enhancedSecurityVars)
 			if err != nil {
 				// Log the error but continue with other modules
-				fmt.Printf("Warning: Failed to parse module %s: %v\n", module.Name, err)
+				p.log.Warn("Failed to parse module %s: %v", module.Name, err)
 				continue
+			}
+			
+			// Log the detected security issues
+			for marker, _ := range securityCriticalVars {
+				if strings.HasPrefix(marker, "_security_") {
+					p.log.Debug("Module %s has security marker: %s", module.Name, marker)
+				}
 			}
 			
 			moduleResources = append(moduleResources, resources...)
+			p.log.Debug("Parsed %d resources from module %s", len(resources), module.Name)
 		} else {
 			// For non-local modules (remote registry, git, etc.), we'd need to download them first
 			// For now, we'll just log that we can't handle them yet
-			fmt.Printf("Note: Skipping remote module %s with source %s\n", module.Name, source)
+			p.log.Debug("Note: Skipping remote module %s with source %s", module.Name, source)
 		}
 	}
 	
 	return moduleResources, nil
 }
 
-// ParseModuleDirectory parses a module directory and adds module context to resources
-func (p *Parser) ParseModuleDirectory(ctx context.Context, modulePath string, moduleName string) ([]types.Resource, error) {
-	// Parse the module directory normally
-	resources, err := p.ParseDirectory(ctx, modulePath)
+// ParseModuleWithVars parses a module directory with parent variables and module variables
+func (p *Parser) ParseModuleWithVars(ctx context.Context, modulePath, moduleName string, moduleVars map[string]interface{}, precalculatedSecurityVars ...map[string]interface{}) ([]types.Resource, error) {
+	// Create a new parser with combined variables
+	moduleParser := New()
+	
+	// Copy parent variables to the module parser
+	for k, v := range p.variables {
+		moduleParser.variables[k] = v
+	}
+	
+	// Track security-critical variables for enhanced analysis
+	securityCriticalVars := make(map[string]interface{})
+	
+	// If precalculated security variables were provided, use them
+	// This allows the caller to preprocess security markers based on module inputs
+	if len(precalculatedSecurityVars) > 0 && precalculatedSecurityVars[0] != nil {
+		for k, v := range precalculatedSecurityVars[0] {
+			securityCriticalVars[k] = v
+			if strings.HasPrefix(k, "_security_") {
+				p.log.Debug("Using precalculated security marker %s = %v for module %s", k, v, moduleName)
+			}
+		}
+	}
+	
+	// Add module-specific variables
+	for k, v := range moduleVars {
+		// Convert to cty.Value for Terraform evaluation
+		ctyVal, err := p.convertToCtyValue(v)
+		if err == nil {
+			moduleParser.variables[k] = ctyVal
+		}
+		
+		// Process security-critical variables specially if not already processed
+		if p.isSecurityCriticalVariable(k, v) && len(precalculatedSecurityVars) == 0 {
+			securityCriticalVars[k] = v
+			
+			// For boolean security settings, retain the worst-case scenario for security analysis
+			if condMap, ok := v.(map[string]interface{}); ok && condMap["_type"] == "conditional_expression" {
+				if secVal, ok := condMap["_security_value"]; ok {
+					securityCriticalVars[k+"_security_value"] = secVal
+				}
+			}
+		}
+	}
+	
+	// Update the evaluation context
+	moduleParser.updateEvalContext()
+	
+	// Parse module directory
+	p.log.Debug("Parsing module at %s with %d security critical vars", modulePath, len(securityCriticalVars))
+	resources, err := moduleParser.ParseDirectory(ctx, modulePath)
+	
+	// Handle parsing error
 	if err != nil {
 		return nil, err
 	}
 	
-	// Add module context to all resources
+	p.log.Debug("Found %d resources in module %s", len(resources), moduleName)
+	
+	// Add module context to resources
 	for i := range resources {
 		// Skip module resources to avoid infinite recursion
 		if resources[i].Type == "module" {
@@ -418,9 +618,152 @@ func (p *Parser) ParseModuleDirectory(ctx context.Context, modulePath string, mo
 		}
 		resources[i].Attributes["_module_name"] = moduleName
 		resources[i].Attributes["_module_path"] = modulePath
+		
+		// Add a copy of module variables for security context
+		moduleVarsCopy := make(map[string]interface{})
+		for k, v := range moduleVars {
+			moduleVarsCopy[k] = v
+		}
+		resources[i].Attributes["_module_vars"] = moduleVarsCopy
+		
+		// Add enhanced security context
+		resources[i].Attributes["_security_critical_vars"] = securityCriticalVars
+		
+		// Important: Add the security markers directly to the RDS resources
+		if strings.HasPrefix(resources[i].Type, "aws_db_instance") || 
+		   strings.HasPrefix(resources[i].Type, "aws_rds_cluster") {
+			// Log that we found an RDS resource in the module
+			p.log.Debug("Found RDS resource %s in module %s", resources[i].ID, moduleName)
+			
+			// Add all security markers directly to the resource attributes for policy detection
+			for k, v := range securityCriticalVars {
+				if strings.HasPrefix(k, "_security_") {
+					resources[i].Attributes[k] = v
+					p.log.Debug("Adding security marker %s = %v to RDS resource %s", k, v, resources[i].ID)
+				}
+			}
+			
+			// Make sure critical security variables are directly accessible to OPA policies
+			// by explicitly adding special markers based on module inputs
+			if val, exists := moduleVars["publicly_accessible"]; exists {
+				if boolVal, isBool := val.(bool); isBool && boolVal == true {
+					resources[i].Attributes["_security_publicly_accessible"] = true
+					p.log.Debug("Direct security marker: _security_publicly_accessible = true for %s", resources[i].ID)
+				}
+			}
+			
+			if val, exists := moduleVars["storage_encrypted"]; exists {
+				if boolVal, isBool := val.(bool); isBool && boolVal == false {
+					resources[i].Attributes["_security_unencrypted"] = true
+					p.log.Debug("Direct security marker: _security_unencrypted = true for %s", resources[i].ID)
+				}
+			}
+			
+			if val, exists := moduleVars["backup_retention_period"]; exists {
+				if numVal, isNum := val.(float64); isNum && numVal == 0 {
+					resources[i].Attributes["_security_no_backup"] = true
+					p.log.Debug("Direct security marker: _security_no_backup = true for %s", resources[i].ID)
+				}
+			}
+			
+			if val, exists := moduleVars["iam_database_authentication_enabled"]; exists {
+				if boolVal, isBool := val.(bool); isBool && boolVal == false {
+					resources[i].Attributes["_security_no_iam_auth"] = true
+					p.log.Debug("Direct security marker: _security_no_iam_auth = true for %s", resources[i].ID)
+				}
+			}
+			
+			if val, exists := moduleVars["deletion_protection"]; exists {
+				if boolVal, isBool := val.(bool); isBool && boolVal == false {
+					resources[i].Attributes["_security_no_deletion_protection"] = true
+					p.log.Debug("Direct security marker: _security_no_deletion_protection = true for %s", resources[i].ID)
+				}
+			}
+			
+			if val, exists := moduleVars["enabled_cloudwatch_logs_exports"]; exists {
+				if arr, isArr := val.([]interface{}); isArr && len(arr) == 0 {
+					resources[i].Attributes["_security_no_log_exports"] = true
+					p.log.Debug("Direct security marker: _security_no_log_exports = true for %s", resources[i].ID)
+				}
+			}
+		} else {
+			// For non-RDS resources, still add security markers but they won't be used in policies
+			for k, v := range securityCriticalVars {
+				if strings.HasPrefix(k, "_security_") {
+					resources[i].Attributes[k] = v
+				}
+			}
+		}
+		
+		// Apply enhanced variable resolution for security-critical attributes
+		p.enhanceSecurityAttributesFromModuleVars(resources[i], moduleVars)
 	}
 	
 	return resources, nil
+}
+
+// Helper to convert Go values to cty values
+func (p *Parser) convertToCtyValue(value interface{}) (cty.Value, error) {
+	switch v := value.(type) {
+	case nil:
+		return cty.NullVal(cty.DynamicPseudoType), nil
+	case bool:
+		return cty.BoolVal(v), nil
+	case int:
+		return cty.NumberIntVal(int64(v)), nil
+	case int64:
+		return cty.NumberIntVal(v), nil
+	case float64:
+		return cty.NumberFloatVal(v), nil
+	case string:
+		// Handle special string patterns
+		if strings.Contains(v, "[CONDITIONAL:") || strings.Contains(v, "[VARIABLE_REFERENCE]") {
+			return cty.DynamicVal, nil
+		}
+		return cty.StringVal(v), nil
+	case []interface{}:
+		vals := make([]cty.Value, len(v))
+		for i, elem := range v {
+			val, err := p.convertToCtyValue(elem)
+			if err != nil {
+				return cty.DynamicVal, err
+			}
+			vals[i] = val
+		}
+		return cty.TupleVal(vals), nil
+	case map[string]interface{}:
+		// Check for special conditional format
+		if typeVal, ok := v["_type"]; ok && typeVal == "conditional_expression" {
+			// For security analysis, use the security value
+			if secVal, ok := v["_security_value"]; ok {
+				return p.convertToCtyValue(secVal)
+			}
+			// If no security value, try the string representation
+			if strVal, ok := v["_string_value"]; ok {
+				return p.convertToCtyValue(strVal)
+			}
+			return cty.DynamicVal, nil
+		}
+		
+		// Regular map
+		vals := make(map[string]cty.Value)
+		for k, elem := range v {
+			val, err := p.convertToCtyValue(elem)
+			if err != nil {
+				return cty.DynamicVal, err
+			}
+			vals[k] = val
+		}
+		return cty.ObjectVal(vals), nil
+	default:
+		return cty.DynamicVal, fmt.Errorf("unsupported type: %T", value)
+	}
+}
+
+// ParseModuleDirectory parses a module directory and adds module context to resources
+func (p *Parser) ParseModuleDirectory(ctx context.Context, modulePath string, moduleName string) ([]types.Resource, error) {
+	// For backward compatibility, call ParseModuleWithVars with empty vars
+	return p.ParseModuleWithVars(ctx, modulePath, moduleName, make(map[string]interface{}))
 }
 
 // SupportedExtensions returns the file extensions this parser supports
@@ -454,7 +797,7 @@ func (p *Parser) extractResources(file *hcl.File, filePath string) ([]types.Reso
 				moduleInfo, err := p.extractModuleInfo(block, filePath)
 				if err != nil {
 					// Log the error but don't fail the entire parsing
-					fmt.Printf("Warning: Failed to extract module info: %v\n", err)
+					p.log.Warn("Failed to extract module info: %v", err)
 					continue
 				}
 				// Store module info as a special resource type
@@ -496,7 +839,7 @@ func (p *Parser) extractResources(file *hcl.File, filePath string) ([]types.Reso
 			moduleInfo, err := p.extractModuleInfoFromJSON(block, filePath)
 			if err != nil {
 				// Log the error but don't fail the entire parsing
-				fmt.Printf("Warning: Failed to extract module info from JSON: %v\n", err)
+				p.log.Warn("Failed to extract module info from JSON: %v", err)
 				continue
 			}
 			// Store module info as a special resource type
@@ -627,6 +970,52 @@ func (p *Parser) extractDataSource(block *hclsyntax.Block, filePath string) (*ty
 func (p *Parser) extractNestedBlock(block *hclsyntax.Block) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
 	
+	// Check if this is a dynamic block
+	if block.Type == "dynamic" && len(block.Labels) > 0 {
+		// Extract the dynamic block type (e.g., "server_side_encryption_configuration")
+		dynamicBlockType := block.Labels[0]
+		result["_is_dynamic"] = true
+		result["_dynamic_type"] = dynamicBlockType
+		
+		// Extract for_each condition
+		forEachAttr, hasForEach := block.Body.Attributes["for_each"]
+		if hasForEach {
+			// Try to evaluate the condition
+			forEachVal, err := p.extractAttributeValue(forEachAttr)
+			if err == nil {
+				result["_for_each"] = forEachVal
+			}
+			
+			// Check for conditional expressions in for_each
+			if conditional, ok := forEachAttr.Expr.(*hclsyntax.ConditionalExpr); ok {
+				result["_conditional_for_each"] = true
+				
+				// Extract both possible values
+				trueBranch, _ := p.extractGenericExpression(conditional.TrueResult)
+				falseBranch, _ := p.extractGenericExpression(conditional.FalseResult)
+				
+				result["_true_branch"] = trueBranch
+				result["_false_branch"] = falseBranch
+				
+				// Try to extract the condition itself
+				condition, _ := p.extractGenericExpression(conditional.Condition)
+				result["_condition"] = condition
+			}
+		}
+		
+		// Extract the content template for security analysis
+		// even if condition currently evaluates to false
+		for _, contentBlock := range block.Body.Blocks {
+			if contentBlock.Type == "content" {
+				contentAttrs, _ := p.extractNestedBlock(contentBlock)
+				result["_content"] = contentAttrs
+				break
+			}
+		}
+		
+		return result, nil
+	}
+	
 	// Extract attributes
 	for name, attr := range block.Body.Attributes {
 		val, err := p.extractAttributeValue(attr)
@@ -634,11 +1023,6 @@ func (p *Parser) extractNestedBlock(block *hclsyntax.Block) (map[string]interfac
 			continue
 		}
 		result[name] = val
-		
-		// Special debug for encryption settings
-		if name == "sse_algorithm" || name == "kms_master_key_id" {
-			fmt.Printf("DEBUG: Nested attribute %s.%s = %v\n", block.Type, name, val)
-		}
 	}
 
 	// Handle nested blocks recursively
@@ -648,13 +1032,6 @@ func (p *Parser) extractNestedBlock(block *hclsyntax.Block) (map[string]interfac
 			continue
 		}
 		result[nestedBlock.Type] = nestedAttrs
-		
-		// Special debug for server_side_encryption blocks
-		if block.Type == "server_side_encryption_configuration" || 
-		   block.Type == "rule" || 
-		   block.Type == "apply_server_side_encryption_by_default" {
-			fmt.Printf("DEBUG: Found nested block %s > %s\n", block.Type, nestedBlock.Type)
-		}
 	}
 
 	return result, nil
@@ -902,61 +1279,194 @@ func (p *Parser) extractConditionalExpression(expr *hclsyntax.ConditionalExpr) (
 		return p.ctyValueToGo(val)
 	}
 	
+	// Create a context-preserving result for security analysis
+	conditionalResult := make(map[string]interface{})
+	conditionalResult["_type"] = "conditional_expression"
+	
 	// Try to evaluate the condition
-	condVal, diags := expr.Condition.Value(p.evalContext)
-	if !diags.HasErrors() {
+	condVal, condDiags := expr.Condition.Value(p.evalContext)
+	if !condDiags.HasErrors() {
+		// If condition can be evaluated, store the result
+		conditionalResult["_condition_evaluated"] = true
+		conditionalResult["_condition_value"] = condVal.True()
+		
 		// If condition can be evaluated, try to return the appropriate branch
 		if condVal.True() {
 			// True branch
 			trueVal, diags := expr.TrueResult.Value(p.evalContext)
 			if !diags.HasErrors() {
-				return p.ctyValueToGo(trueVal)
-			}
-			
-			// Try to extract the true value even if it can't be fully evaluated
-			if trueRef, ok := expr.TrueResult.(*hclsyntax.ScopeTraversalExpr); ok {
-				return p.extractVariableReference(trueRef)
+				goVal, _ := p.ctyValueToGo(trueVal)
+				conditionalResult["_value"] = goVal
+				return conditionalResult, nil
 			}
 		} else {
 			// False branch
 			falseVal, diags := expr.FalseResult.Value(p.evalContext)
 			if !diags.HasErrors() {
-				return p.ctyValueToGo(falseVal)
-			}
-			
-			// Try to extract the false value even if it can't be fully evaluated
-			if falseRef, ok := expr.FalseResult.(*hclsyntax.ScopeTraversalExpr); ok {
-				return p.extractVariableReference(falseRef)
+				goVal, _ := p.ctyValueToGo(falseVal)
+				conditionalResult["_value"] = goVal
+				return conditionalResult, nil
 			}
 		}
 	}
 	
-	// If we can't evaluate, try to extract both values
+	// Try to extract condition for analysis
+	conditionVal, _ := p.extractGenericExpression(expr.Condition)
+	conditionalResult["_condition"] = conditionVal
+	
+	// Check for environment-based conditions (common security pattern)
+	if isEnvCondition := p.isEnvironmentCondition(expr.Condition); isEnvCondition {
+		conditionalResult["_environment_condition"] = true
+	}
+	
+	// Check for variable negation (common pattern: !var.secure_mode)
+	if isVarNegation, varName := p.isVariableNegation(expr.Condition); isVarNegation {
+		conditionalResult["_variable_negation"] = true
+		conditionalResult["_negated_variable"] = varName
+	}
+	
+	// Extract both branches
 	var trueValue, falseValue interface{}
-	var err error
 	
 	// Extract the true value
-	if trueRef, ok := expr.TrueResult.(*hclsyntax.ScopeTraversalExpr); ok {
-		trueValue, _ = p.extractVariableReference(trueRef)
-	} else {
-		trueValue, err = p.extractGenericExpression(expr.TrueResult)
-		if err != nil {
-			trueValue = "[TRUE_VALUE]"
-		}
-	}
+	trueValue, _ = p.extractGenericExpression(expr.TrueResult)
+	conditionalResult["_true_value"] = trueValue
 	
 	// Extract the false value
-	if falseRef, ok := expr.FalseResult.(*hclsyntax.ScopeTraversalExpr); ok {
-		falseValue, _ = p.extractVariableReference(falseRef)
-	} else {
-		falseValue, err = p.extractGenericExpression(expr.FalseResult)
-		if err != nil {
-			falseValue = "[FALSE_VALUE]"
+	falseValue, _ = p.extractGenericExpression(expr.FalseResult)
+	conditionalResult["_false_value"] = falseValue
+	
+	// For security analysis, use the least secure option by default
+	conditionalResult["_security_analysis"] = "worst_case"
+	conditionalResult["_security_value"] = p.leastSecureOption(trueValue, falseValue)
+	
+	// For backward compatibility, also return a string representation
+	conditionalResult["_string_value"] = fmt.Sprintf("[CONDITIONAL: %v OR %v]", trueValue, falseValue)
+	
+	return conditionalResult, nil
+}
+
+// Helper to check if a condition is likely comparing an environment variable
+func (p *Parser) isEnvironmentCondition(condition hclsyntax.Expression) bool {
+	// Check if it's a binary operation
+	if binaryOp, ok := condition.(*hclsyntax.BinaryOpExpr); ok {
+		// Check if either side is a variable reference
+		if leftVar, isLeft := binaryOp.LHS.(*hclsyntax.ScopeTraversalExpr); isLeft {
+			return p.isEnvironmentVar(leftVar)
+		}
+		if rightVar, isRight := binaryOp.RHS.(*hclsyntax.ScopeTraversalExpr); isRight {
+			return p.isEnvironmentVar(rightVar)
+		}
+	}
+	return false
+}
+
+// Helper to check if a variable reference likely refers to environment
+func (p *Parser) isEnvironmentVar(expr *hclsyntax.ScopeTraversalExpr) bool {
+	// Traverse the variable path
+	if len(expr.Traversal) < 2 {
+		return false
+	}
+	
+	// Check if it's a var reference
+	root, ok := expr.Traversal[0].(hcl.TraverseRoot)
+	if !ok || root.Name != "var" {
+		return false
+	}
+	
+	// Check the variable name
+	attr, ok := expr.Traversal[1].(hcl.TraverseAttr)
+	if !ok {
+		return false
+	}
+	
+	// Common environment variable names
+	envVarNames := []string{"environment", "env", "stage", "production", "prod_mode", "production_mode"}
+	for _, name := range envVarNames {
+		if attr.Name == name || strings.Contains(attr.Name, "environment") || strings.Contains(attr.Name, "env") {
+			return true
 		}
 	}
 	
-	// Return a placeholder with the possible values
-	return fmt.Sprintf("[CONDITIONAL: %v OR %v]", trueValue, falseValue), nil
+	return false
+}
+
+// Helper to determine which option is least secure for security analysis
+func (p *Parser) leastSecureOption(val1, val2 interface{}) interface{} {
+	// For string values, check known insecure values
+	str1, isStr1 := val1.(string)
+	str2, isStr2 := val2.(string)
+	
+	if isStr1 && isStr2 {
+		// Known less secure values (precedence order)
+		lessSecureValues := []string{
+			"public-read-write",
+			"public-read", 
+			"authenticated-read", 
+			"private",
+			"false",
+			"0",
+		}
+		
+		// Check which value is less secure
+		for _, insecure := range lessSecureValues {
+			if str1 == insecure {
+				return val1
+			}
+			if str2 == insecure {
+				return val2
+			}
+		}
+	}
+	
+	// For boolean values, false is typically less secure
+	bool1, isBool1 := val1.(bool)
+	bool2, isBool2 := val2.(bool)
+	
+	if isBool1 && isBool2 {
+		if !bool1 && bool2 {
+			return val1
+		}
+		if bool1 && !bool2 {
+			return val2
+		}
+	}
+	
+	// For numbers, lower is typically less secure (retention periods, etc)
+	num1, isNum1 := val1.(float64)
+	num2, isNum2 := val2.(float64)
+	
+	if isNum1 && isNum2 {
+		if num1 < num2 {
+			return val1
+		}
+		if num2 < num1 {
+			return val2
+		}
+	}
+	
+	// Check for conditional values embedded in maps
+	condMap1, isCond1 := val1.(map[string]interface{})
+	condMap2, isCond2 := val2.(map[string]interface{})
+	
+	if isCond1 {
+		if typeVal, ok := condMap1["_type"].(string); ok && typeVal == "conditional_expression" {
+			if secVal, ok := condMap1["_security_value"]; ok {
+				val1 = secVal // Use the security value for comparison
+			}
+		}
+	}
+	
+	if isCond2 {
+		if typeVal, ok := condMap2["_type"].(string); ok && typeVal == "conditional_expression" {
+			if secVal, ok := condMap2["_security_value"]; ok {
+				val2 = secVal // Use the security value for comparison
+			}
+		}
+	}
+	
+	// If we can't determine, return both for analysis
+	return []interface{}{val1, val2}
 }
 
 // extractBinaryOperation handles binary operations like: var.count + 1
@@ -1179,4 +1689,438 @@ func (p *Parser) ctyValueToGo(val cty.Value) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", val.Type().FriendlyName())
 	}
+}
+
+// isSecurityCriticalVariable determines if a variable is security-relevant
+func (p *Parser) isSecurityCriticalVariable(name string, value interface{}) bool {
+	// Common security-critical variable names
+	securityVarNames := []string{
+		"publicly_accessible", "public", "public_access",
+		"storage_encrypted", "encrypted", "encryption", "encrypt",
+		"backup", "backup_retention", "retention",
+		"multi_az", "deletion_protection", "delete_protection",
+		"iam_database_authentication", "iam_auth",
+		"log", "logs", "cloudwatch", "audit",
+		"parameter_group", "parameter",
+		"security", "secure", "insecure",
+		"production", "prod", "environment", "env",
+	}
+
+	// High-priority security boolean variables that must be specially tracked
+	securityBooleanVars := map[string]bool{
+		"publicly_accessible": true, 
+		"storage_encrypted": true,
+		"multi_az": true,
+		"deletion_protection": true,
+		"iam_database_authentication_enabled": true,
+		"performance_insights_enabled": true,
+	}
+
+	// Direct match for critical security boolean variables
+	if _, ok := securityBooleanVars[name]; ok {
+		return true
+	}
+
+	// Check variable name against known security-critical names
+	for _, secVarName := range securityVarNames {
+		if strings.Contains(strings.ToLower(name), secVarName) {
+			return true
+		}
+	}
+
+	// Check if it's a boolean or conditional, which might be security-relevant
+	switch v := value.(type) {
+	case bool:
+		return true // All booleans could be security switches
+	case map[string]interface{}:
+		// Check if it's a conditional expression
+		if typeVal, ok := v["_type"]; ok && typeVal == "conditional_expression" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isSecurityAttributeName checks if an attribute name is security-critical
+func (p *Parser) isSecurityAttributeName(name string) bool {
+	// Known security-critical attribute names
+	securityAttrs := []string{
+		"publicly_accessible", "public_access",
+		"storage_encrypted", "encrypted",
+		"backup_retention_period",
+		"multi_az", "deletion_protection",
+		"iam_database_authentication_enabled",
+		"enabled_cloudwatch_logs_exports",
+		"parameter_group_name",
+		"tags.Environment", "environment",
+	}
+
+	for _, attr := range securityAttrs {
+		if name == attr {
+			return true
+		}
+	}
+
+	return false
+}
+
+// getCurrentAttributeName tries to determine the parent attribute name for contextual analysis
+func (p *Parser) getCurrentAttributeName(expr hclsyntax.Expression) string {
+	// This is a simplification - in a real implementation, you would need to track
+	// the parent attribute during recursive descent parsing
+	return "" // Default to empty, to be enhanced in future versions
+}
+
+// isVariableNegation checks if the condition is negating a variable (like !var.secure_mode)
+func (p *Parser) isVariableNegation(condition hclsyntax.Expression) (bool, string) {
+	// Check if it's a unary operation with NOT
+	if unaryOp, ok := condition.(*hclsyntax.UnaryOpExpr); ok && unaryOp.Op == hclsyntax.OpLogicalNot {
+		// Check if the operand is a variable reference
+		if varRef, ok := unaryOp.Val.(*hclsyntax.ScopeTraversalExpr); ok {
+			// Extract variable name if possible
+			if len(varRef.Traversal) >= 2 {
+				if rootName, ok := varRef.Traversal[0].(hcl.TraverseRoot); ok && rootName.Name == "var" {
+					if attrName, ok := varRef.Traversal[1].(hcl.TraverseAttr); ok {
+						return true, attrName.Name
+					}
+				}
+			}
+		}
+	}
+
+	return false, ""
+}
+
+// enhanceCriticalRdsSecurityAttributes adds special security indicators for critical RDS settings
+func (p *Parser) enhanceCriticalRdsSecurityAttributes(attrs map[string]interface{}) {
+	// Check for direct insecure boolean values
+	type criticalAttrInfo struct {
+		attrName    string
+		insecureVal bool
+		securityKey string
+	}
+	
+	criticalBooleanAttrs := []criticalAttrInfo{
+		{"publicly_accessible", true, "_security_publicly_accessible"},
+		{"storage_encrypted", false, "_security_unencrypted"},
+		{"iam_database_authentication_enabled", false, "_security_no_iam_auth"},
+		{"deletion_protection", false, "_security_no_deletion_protection"},
+	}
+	
+	// Check each critical boolean attribute
+	for _, critAttr := range criticalBooleanAttrs {
+		if attrVal, exists := attrs[critAttr.attrName]; exists {
+			// Direct boolean value
+			if boolVal, isBool := attrVal.(bool); isBool && boolVal == critAttr.insecureVal {
+				// This is a potential security issue
+				attrs[critAttr.securityKey] = true
+			}
+			
+			// Enhanced attribute with security context
+			if enhAttr, isEnh := attrVal.(map[string]interface{}); isEnh {
+				if typeVal, hasType := enhAttr["_type"]; hasType && 
+				   (typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
+					// Check security value
+					if secVal, hasSec := enhAttr["_security_value"]; hasSec {
+						if boolVal, isBool := secVal.(bool); isBool && boolVal == critAttr.insecureVal {
+							// This is a potential security issue
+							attrs[critAttr.securityKey] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// Special handling for backup_retention_period
+	if retPeriod, exists := attrs["backup_retention_period"]; exists {
+		// Check direct value
+		if numVal, isNum := retPeriod.(float64); isNum && numVal == 0 {
+			// Backups disabled - security issue
+			attrs["_security_no_backup"] = true
+		}
+		
+		// Check enhanced value
+		if enhAttr, isEnh := retPeriod.(map[string]interface{}); isEnh {
+			if typeVal, hasType := enhAttr["_type"]; hasType && 
+			   (typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
+				// Check security value
+				if secVal, hasSec := enhAttr["_security_value"]; hasSec {
+					if numVal, isNum := secVal.(float64); isNum && numVal == 0 {
+						// This is a potential security issue
+						attrs["_security_no_backup"] = true
+					}
+				}
+			}
+		}
+	}
+	
+	// Special handling for enabled_cloudwatch_logs_exports
+	if logExports, exists := attrs["enabled_cloudwatch_logs_exports"]; exists {
+		// Check if it's empty
+		if arr, isArr := logExports.([]interface{}); isArr && len(arr) == 0 {
+			attrs["_security_no_log_exports"] = true
+		}
+		
+		// Check enhanced value
+		if enhAttr, isEnh := logExports.(map[string]interface{}); isEnh {
+			if typeVal, hasType := enhAttr["_type"]; hasType && 
+			   (typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
+				// Check security value
+				if secVal, hasSec := enhAttr["_security_value"]; hasSec {
+					if arr, isArr := secVal.([]interface{}); isArr && len(arr) == 0 {
+						// This is a potential security issue
+						attrs["_security_no_log_exports"] = true
+					}
+				}
+			}
+		}
+	}
+	
+	// Special handling for parameter_group_name
+	if pgName, exists := attrs["parameter_group_name"]; exists {
+		// Check if it contains "default"
+		if strVal, isStr := pgName.(string); isStr && strings.Contains(strVal, "default") {
+			attrs["_security_default_parameter_group"] = true
+		}
+		
+		// Check enhanced value
+		if enhAttr, isEnh := pgName.(map[string]interface{}); isEnh {
+			if typeVal, hasType := enhAttr["_type"]; hasType && 
+			   (typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
+				// Check security value
+				if secVal, hasSec := enhAttr["_security_value"]; hasSec {
+					if strVal, isStr := secVal.(string); isStr && strings.Contains(strVal, "default") {
+						// This is a potential security issue
+						attrs["_security_default_parameter_group"] = true
+					}
+				}
+			}
+		}
+	}
+}
+
+// enhanceSecurityAttributesFromModuleVars enhances resource attributes with module variables
+func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource, moduleVars map[string]interface{}) {
+	// Skip non-RDS resources
+	if !strings.HasPrefix(resource.Type, "aws_db_instance") && 
+	   !strings.HasPrefix(resource.Type, "aws_rds_cluster") {
+		return
+	}
+	
+	// Get the attributes map
+	attrs := resource.Attributes
+	if attrs == nil {
+		return
+	}
+	
+	// Add module-specific security metadata
+	attrs["_resource_in_module"] = true
+	
+	// Special handling for critical RDS security attributes
+	p.enhanceCriticalRdsSecurityAttributes(attrs)
+	
+	// RDS security-critical attributes to enhance with module variable context
+	securityAttrs := []string{
+		"publicly_accessible", 
+		"storage_encrypted", 
+		"backup_retention_period",
+		"multi_az", 
+		"deletion_protection",
+		"iam_database_authentication_enabled",
+		"enabled_cloudwatch_logs_exports",
+		"parameter_group_name",
+	}
+	
+	// Add security context to these attributes
+	for _, attrName := range securityAttrs {
+		if attrVal, exists := attrs[attrName]; exists {
+			// If the attribute is directly from a module variable, add context
+			if varRef, isRef := attrVal.(string); isRef && strings.HasPrefix(varRef, "[var.") {
+				// Extract variable name
+				varName := strings.TrimPrefix(strings.TrimSuffix(varRef, "]"), "[var.")
+				
+				// Look for the variable in module variables
+				if moduleVal, ok := moduleVars[varName]; ok {
+					// Create an enhanced attribute with security context
+					enhancedAttr := make(map[string]interface{})
+					enhancedAttr["_type"] = "security_enhanced_attribute"
+					enhancedAttr["_original_value"] = attrVal
+					enhancedAttr["_variable_name"] = varName
+					enhancedAttr["_module_value"] = moduleVal
+					
+					// For security analysis, determine the worst-case value
+					if condMap, isCond := moduleVal.(map[string]interface{}); isCond && 
+					   condMap["_type"] == "conditional_expression" {
+						if secVal, hasSec := condMap["_security_value"]; hasSec {
+							enhancedAttr["_security_value"] = secVal
+						}
+					} else {
+						enhancedAttr["_security_value"] = moduleVal
+					}
+					
+					// Replace the attribute with the enhanced version
+					attrs[attrName] = enhancedAttr
+					
+					// Special handling for specific RDS security attributes
+					switch attrName {
+					case "publicly_accessible":
+						// For publicly_accessible, also add a direct attribute for policy evaluation
+						if boolVal, isBool := enhancedAttr["_security_value"].(bool); isBool && boolVal {
+							// This is a potential security issue - make it visible to policies
+							attrs["_security_publicly_accessible"] = true
+							p.log.Debug("Enhanced attribute security marker: _security_publicly_accessible = true for %s", resource.ID)
+						}
+					case "storage_encrypted":
+						// For storage_encrypted, also add a direct attribute for policy evaluation
+						if boolVal, isBool := enhancedAttr["_security_value"].(bool); isBool && !boolVal {
+							// This is a potential security issue - make it visible to policies
+							attrs["_security_unencrypted"] = true
+							p.log.Debug("Enhanced attribute security marker: _security_unencrypted = true for %s", resource.ID)
+						}
+					case "backup_retention_period":
+						// For backup_retention_period, add context for policies
+						if numVal, isNum := enhancedAttr["_security_value"].(float64); isNum && numVal == 0 {
+							// This is a potential security issue - make it visible to policies
+							attrs["_security_no_backup"] = true
+							p.log.Debug("Enhanced attribute security marker: _security_no_backup = true for %s", resource.ID)
+						}
+					}
+				}
+			}
+			
+			// If the attribute is a conditional expression itself, ensure it has security context
+			if condMap, isCond := attrVal.(map[string]interface{}); isCond && 
+			   condMap["_type"] == "conditional_expression" {
+				// Make sure it's marked as a security attribute
+				condMap["_security_critical"] = true
+				condMap["_attribute_name"] = attrName
+				
+				// Add specialized handling based on attribute name
+				switch attrName {
+				case "publicly_accessible":
+					// For publicly_accessible, check if the security value is true
+					if secVal, ok := condMap["_security_value"]; ok {
+						if boolVal, isBool := secVal.(bool); isBool && boolVal {
+							attrs["_security_publicly_accessible"] = true
+							p.log.Debug("Conditional security marker: _security_publicly_accessible = true for %s", resource.ID)
+						}
+					}
+				case "storage_encrypted":
+					// For storage_encrypted, check if the security value is false
+					if secVal, ok := condMap["_security_value"]; ok {
+						if boolVal, isBool := secVal.(bool); isBool && !boolVal {
+							attrs["_security_unencrypted"] = true
+							p.log.Debug("Conditional security marker: _security_unencrypted = true for %s", resource.ID)
+						}
+					}
+				case "backup_retention_period":
+					// For backup_retention_period, check if the security value is 0
+					if secVal, ok := condMap["_security_value"]; ok {
+						if numVal, isNum := secVal.(float64); isNum && numVal == 0 {
+							attrs["_security_no_backup"] = true
+							p.log.Debug("Conditional security marker: _security_no_backup = true for %s", resource.ID)
+						}
+					}
+				case "iam_database_authentication_enabled":
+					// For iam_database_authentication_enabled, check if the security value is false
+					if secVal, ok := condMap["_security_value"]; ok {
+						if boolVal, isBool := secVal.(bool); isBool && !boolVal {
+							attrs["_security_no_iam_auth"] = true
+							p.log.Debug("Conditional security marker: _security_no_iam_auth = true for %s", resource.ID)
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// Handle boolean values directly - especially for module variables like in variable_db
+	for varName, varValue := range moduleVars {
+		// Handle direct boolean values that might be security critical
+		if boolVal, isBool := varValue.(bool); isBool {
+			switch varName {
+			case "publicly_accessible":
+				if boolVal { // true is insecure
+					attrs["_security_publicly_accessible"] = true
+					p.log.Debug("Direct module var security marker: _security_publicly_accessible = true for %s", resource.ID)
+				}
+			case "storage_encrypted":
+				if !boolVal { // false is insecure
+					attrs["_security_unencrypted"] = true
+					p.log.Debug("Direct module var security marker: _security_unencrypted = true for %s", resource.ID)
+				}
+			case "iam_database_authentication_enabled":
+				if !boolVal { // false is insecure
+					attrs["_security_no_iam_auth"] = true
+					p.log.Debug("Direct module var security marker: _security_no_iam_auth = true for %s", resource.ID)
+				}
+			case "deletion_protection":
+				if !boolVal { // false is insecure
+					attrs["_security_no_deletion_protection"] = true
+					p.log.Debug("Direct module var security marker: _security_no_deletion_protection = true for %s", resource.ID)
+				}
+			}
+		}
+		
+		// Handle numeric values like backup_retention_period
+		if numVal, isNum := varValue.(float64); isNum && varName == "backup_retention_period" && numVal == 0 {
+			attrs["_security_no_backup"] = true
+			p.log.Debug("Direct module var security marker: _security_no_backup = true for %s", resource.ID)
+		}
+		
+		// Handle conditional expressions in module variables
+		if condMap, isCond := varValue.(map[string]interface{}); isCond && condMap["_type"] == "conditional_expression" {
+			if secVal, hasSec := condMap["_security_value"]; hasSec {
+				switch varName {
+				case "publicly_accessible":
+					if bVal, isBool := secVal.(bool); isBool && bVal {
+						attrs["_security_publicly_accessible"] = true
+						p.log.Debug("Module conditional security marker: _security_publicly_accessible = true for %s", resource.ID)
+					}
+				case "storage_encrypted":
+					if bVal, isBool := secVal.(bool); isBool && !bVal {
+						attrs["_security_unencrypted"] = true
+						p.log.Debug("Module conditional security marker: _security_unencrypted = true for %s", resource.ID)
+					}
+				case "backup_retention_period":
+					if numVal, isNum := secVal.(float64); isNum && numVal == 0 {
+						attrs["_security_no_backup"] = true
+						p.log.Debug("Module conditional security marker: _security_no_backup = true for %s", resource.ID)
+					}
+				}
+			}
+		}
+	}
+	
+	// Handle special case for tags
+	if tags, hasTags := attrs["tags"].(map[string]interface{}); hasTags {
+		// Check for environment tag
+		if envTag, hasEnv := tags["Environment"]; hasEnv {
+			// If it's a production environment, add metadata for policy checks
+			if envStr, isStr := envTag.(string); isStr && 
+			   (envStr == "production" || envStr == "prod") {
+				attrs["_is_production"] = true
+				
+				// For production environments, multi-AZ and deletion protection should be enabled
+				if multiAz, hasMultiAz := attrs["multi_az"]; hasMultiAz {
+					if boolVal, isBool := multiAz.(bool); isBool && !boolVal {
+						// This is a potential security issue for production environments
+						attrs["_security_no_multi_az_prod"] = true
+					}
+				}
+				
+				if delProtection, hasDelProtection := attrs["deletion_protection"]; hasDelProtection {
+					if boolVal, isBool := delProtection.(bool); isBool && !boolVal {
+						// This is a potential security issue for production environments
+						attrs["_security_no_deletion_protection_prod"] = true
+					}
+				}
+			}
+		}
+	}
+	
+	// No need to update resource.Attributes since we're modifying the map directly
+	// The map is passed by reference, so changes are reflected in the original
 }

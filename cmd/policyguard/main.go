@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	version = "0.3.0"
+	version = "0.3.1"
 	commit  = "none"
 	date    = "unknown"
 )
@@ -114,6 +114,7 @@ func newScanCmd() *cobra.Command {
 		output             string
 		failOnError        bool
 		severityConfigPath string
+		verbose            bool
 	)
 
 	cmd := &cobra.Command{
@@ -127,6 +128,15 @@ func newScanCmd() *cobra.Command {
 
 			// Create parser
 			tfParser := terraform.New()
+			
+			// Set logging level based on verbose flag
+			log := logger.Default()
+			if verbose {
+				log.SetLevel(logger.DebugLevel)
+			} else {
+				log.SetLevel(logger.InfoLevel)
+			}
+			tfParser.WithLogger(log)
 			
 			// Create policy engine
 			policyEngine := opa.New()
@@ -205,6 +215,7 @@ func newScanCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&output, "output", "o", "", "output file (default: stdout)")
 	cmd.Flags().BoolVar(&failOnError, "fail-on-error", false, "exit with non-zero code on policy violations")
 	cmd.Flags().StringVar(&severityConfigPath, "severity-config", "", "path to custom policy severity configuration")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "show verbose debug output")
 
 	return cmd
 }

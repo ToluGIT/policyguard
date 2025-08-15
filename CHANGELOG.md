@@ -5,6 +5,32 @@ All notable changes to PolicyGuard will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-08-15
+
+### Added
+- **Enhanced Module Security Detection**: Improved security analysis for Terraform modules
+  - Enhanced conditional variable resolution for module security attributes
+  - Added special handling for security-critical boolean variables
+  - Pre-processed security markers for module variables
+  - Extended debug logging for module resolution
+  
+### Changed
+- **Parser Enhancement**: Significantly improved security context propagation through modules
+  - Multiple layers of security marker propagation for redundancy
+  - Enhanced tracking of security-critical variables across module boundaries
+  - Strengthened detection of insecure configurations in conditional expressions
+  
+### Fixed
+- **RDS Module Detection**: Fixed security violation detection in RDS modules
+  - Public accessibility detection in module variables
+  - Unencrypted storage detection in modules
+  - Backup configuration validation in modules
+  - IAM authentication detection in modules
+- **Debug Output Control**: Improved control over debug logging
+  - Replaced direct printf statements with proper logger calls
+  - Debug output now only shows when using verbose flag
+  - Warnings still displayed at appropriate log level
+
 ## [0.3.0] - 2025-08-15
 
 ### Added
@@ -112,7 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] Web UI for policy management
 
 
-[Unreleased]: https://github.com/ToluGIT/policyguard/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/ToluGIT/policyguard/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/ToluGIT/policyguard/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/ToluGIT/policyguard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ToluGIT/policyguard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ToluGIT/policyguard/releases/tag/v0.1.0
