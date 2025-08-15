@@ -12,14 +12,16 @@ import (
 	"github.com/open-policy-agent/opa/storage"
 	"github.com/open-policy-agent/opa/storage/inmem"
 	"github.com/ToluGIT/policyguard"
+	"github.com/ToluGIT/policyguard/pkg/config"
 	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
 // Engine implements the policy.Engine interface using OPA
 type Engine struct {
-	compiler *ast.Compiler
-	store    storage.Store
-	policies map[string]*Policy
+	compiler         *ast.Compiler
+	store            storage.Store
+	policies         map[string]*Policy
+	severityConfig   *config.SeverityConfig
 }
 
 // Policy represents a loaded OPA policy
@@ -32,9 +34,17 @@ type Policy struct {
 // New creates a new OPA engine
 func New() *Engine {
 	return &Engine{
-		store:    inmem.New(),
-		policies: make(map[string]*Policy),
+		store:          inmem.New(),
+		policies:       make(map[string]*Policy),
+		severityConfig: config.NewDefaultSeverityConfig(),
 	}
+}
+
+// WithSeverityConfig sets a custom severity configuration
+func (e *Engine) WithSeverityConfig(configPath string) error {
+	var err error
+	e.severityConfig, err = config.LoadSeverityConfig(configPath)
+	return err
 }
 
 // Evaluate evaluates resources against loaded policies
@@ -132,12 +142,31 @@ func (e *Engine) parseViolation(v interface{}, resource types.Resource) (*types.
 	if id, ok := vMap["id"].(string); ok {
 		violation.ID = id
 	}
-	if policyID, ok := vMap["policy_id"].(string); ok {
-		violation.PolicyID = policyID
+	
+	var policyID string
+	if pid, ok := vMap["policy_id"].(string); ok {
+		policyID = pid
+		violation.PolicyID = pid
 	}
-	if severity, ok := vMap["severity"].(string); ok {
-		violation.Severity = severity
+	
+	// Get the original severity from the policy
+	var originalSeverity string
+	if sev, ok := vMap["severity"].(string); ok {
+		originalSeverity = sev
 	}
+	
+	// Apply severity customization if we have both policy ID and original severity
+	if policyID != "" && e.severityConfig != nil {
+		customSeverity := e.severityConfig.GetSeverity(policyID, originalSeverity)
+		violation.Severity = customSeverity
+	} else if originalSeverity != "" {
+		// Use original severity if no customization or missing policy ID
+		violation.Severity = originalSeverity
+	} else {
+		// Fallback to medium severity if nothing else works
+		violation.Severity = types.SeverityMedium
+	}
+	
 	if message, ok := vMap["message"].(string); ok {
 		violation.Message = message
 	}

@@ -25,12 +25,37 @@ import (
 )
 
 var (
-	version = "0.2.0"
+	version = "0.3.0"
 	commit  = "none"
 	date    = "unknown"
 )
 
+func printBanner() {
+	banner := `
+██████╗  ██████╗ ██╗     ██╗ ██████╗██╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ██████╗ ██████╗ 
+██╔══██╗██╔═══██╗██║     ██║██╔════╝╚██╗ ██╔╝██╔════╝ ██║   ██║██╔══██╗██╔══██╗██╔══██╗
+██████╔╝██║   ██║██║     ██║██║      ╚████╔╝ ██║  ███╗██║   ██║███████║██████╔╝██║  ██║
+██╔═══╝ ██║   ██║██║     ██║██║       ╚██╔╝  ██║   ██║██║   ██║██╔══██║██╔══██╗██║  ██║
+██║     ╚██████╔╝███████╗██║╚██████╗   ██║   ╚██████╔╝╚██████╔╝██║  ██║██║  ██║██████╔╝
+╚═╝      ╚═════╝ ╚══════╝╚═╝ ╚═════╝   ╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ 
+                   Security Policy Scanner for Infrastructure as Code
+`
+	fmt.Println(banner)
+	fmt.Printf("By ToluBanji - ToluGIT | version: %s\n", version)
+	
+	// Simulate an update check for demonstration purposes
+	// This would be replaced with actual update check logic in the future
+	latestVersion := "0.3.1"
+	if version != latestVersion {
+		fmt.Printf("Update available %s -> %s\n", version, latestVersion)
+	}
+	
+	fmt.Println() // Add a blank line after the banner for better readability
+}
+
 func main() {
+	printBanner()
+	
 	if err := newRootCmd().Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -66,10 +91,11 @@ to identify potential security issues and compliance violations.`,
 
 func newScanCmd() *cobra.Command {
 	var (
-		policyPath   string
-		format       string
-		output       string
-		failOnError  bool
+		policyPath         string
+		format             string
+		output             string
+		failOnError        bool
+		severityConfigPath string
 	)
 
 	cmd := &cobra.Command{
@@ -86,6 +112,13 @@ func newScanCmd() *cobra.Command {
 			
 			// Create policy engine
 			policyEngine := opa.New()
+			
+			// Load severity configuration if specified
+			if severityConfigPath != "" {
+				if err := policyEngine.WithSeverityConfig(severityConfigPath); err != nil {
+					return fmt.Errorf("failed to load severity configuration: %w", err)
+				}
+			}
 			
 			// Load policies
 			if err := policyEngine.LoadPoliciesFromDirectory(ctx, policyPath); err != nil {
@@ -153,6 +186,7 @@ func newScanCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&format, "format", "f", "human", "output format (human, json, junit, sarif)")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "output file (default: stdout)")
 	cmd.Flags().BoolVar(&failOnError, "fail-on-error", false, "exit with non-zero code on policy violations")
+	cmd.Flags().StringVar(&severityConfigPath, "severity-config", "", "path to custom policy severity configuration")
 
 	return cmd
 }

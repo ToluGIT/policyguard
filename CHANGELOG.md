@@ -5,13 +5,37 @@ All notable changes to PolicyGuard will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2025-08-15
 
 ### Added
+- **3 New AWS Service Security Policies**: Expanded coverage with policies for message and data services
+  - SNS security policies (encryption, access control, FIFO configuration, delivery protocols)
+  - SQS security policies (encryption, dead letter queues, access control, message retention)
+  - DynamoDB security policies (encryption, recovery, TTL management, monitoring, autoscaling)
+- **Terraform Module Support**: Parse and analyze resources within Terraform modules
+  - Local module resolution for relative paths (./modules)
+  - Module context tracking for better violation attribution
+  - Resource ID prefixing with module information
+- **Variable Interpolation**: Support for Terraform variable references and interpolation
+  - Direct variable references (var.name)
+  - String interpolation syntax (${var.name})
+  - Conditional expressions using variables (var.enabled ? "yes" : "no")
+  - Binary operations with variables (var.count + 1)
+- **Policy Severity Customization**: Configure custom severities for policies
+  - JSON configuration file format
+  - Per-policy severity overrides
+  - Default severity configuration
+  - Command-line flag to specify configuration file
 
 ### Changed
+- **Documentation**: Enhanced README with comprehensive coverage of new features
+- **Reporting**: Improved violation messages with module context information
+- **Command-line Interface**: Added `--severity-config` flag to scan command
 
 ### Fixed
+- **Parser Robustness**: Fixed variable reference handling in complex expressions
+- **DynamoDB Policy**: Resolved duplicate variable declaration issue
+- **SNS Policy**: Fixed OR condition syntax using helper functions
 
 
 ## [0.2.0] - 2025-07-14
@@ -43,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Encryption Standards**: KMS and encryption-at-rest validation across services
 
 
-## [0.1.0] - 2024-01-15
+## [0.1.0] - 2025-05-15
 
 ### Added
 - Core architecture with modular design
@@ -73,10 +97,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Roadmap
 
 ### v0.3.0 (Planned)  
-- [ ] Additional AWS policies (ECS, EKS, SNS, SQS, DynamoDB)
-- [ ] Support for Terraform modules
-- [ ] Variable interpolation in Terraform files
-- [ ] Policy severity customization
+- [x] Additional AWS policies (~~ECS, EKS,~~ SNS, SQS, DynamoDB)
+- [x] Support for Terraform modules
+- [x] Variable interpolation in Terraform files
+- [x] Policy severity customization
 - [ ] YAML configuration file support
 
 ### v0.4.0 (Planned)
@@ -88,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] Web UI for policy management
 
 
-[Unreleased]: https://github.com/ToluGIT/policyguard/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ToluGIT/policyguard/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ToluGIT/policyguard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ToluGIT/policyguard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ToluGIT/policyguard/releases/tag/v0.1.0

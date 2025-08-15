@@ -1,0 +1,12 @@
+{
+  "description": "Custom policy severity configuration",
+  "default_severity": "medium",
+  "severities": {
+    "s3_bucket_encryption": "critical",
+    "s3_bucket_logging": "low",
+    "dynamodb_encryption": "high",
+    "dynamodb_recovery": "medium",
+    "sns_encryption": "high",
+    "sqs_encryption": "high"
+  }
+}

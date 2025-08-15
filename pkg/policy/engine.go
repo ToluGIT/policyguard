@@ -18,6 +18,9 @@ type Engine interface {
 	
 	// GetLoadedPolicies returns the IDs of all loaded policies
 	GetLoadedPolicies() []string
+	
+	// WithSeverityConfig sets a custom severity configuration
+	WithSeverityConfig(configPath string) error
 }
 
 // Policy represents a security policy

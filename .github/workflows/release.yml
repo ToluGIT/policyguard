@@ -220,7 +220,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        name: "PolicyGuard v${{ github.ref_name }}"
+        name: "PolicyGuard ${{ github.ref_name }}"
         body_path: release_notes.md
         files: |
           build/policyguard-linux-amd64

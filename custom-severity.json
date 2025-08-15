@@ -1,0 +1,9 @@
+{
+  "description": "Test severity configuration",
+  "default_severity": "low",
+  "severities": {
+    "s3_bucket_logging": "info",
+    "s3_bucket_encryption": "critical",
+    "dynamodb_encryption": "critical"
+  }
+}

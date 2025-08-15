@@ -4,7 +4,7 @@
 BINARY_NAME=policyguard
 BINARY_PATH=./bin/$(BINARY_NAME)
 MAIN_PATH=./cmd/policyguard
-VERSION=0.1.0
+VERSION=0.3.0
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.date=$(BUILD_TIME)"
 
