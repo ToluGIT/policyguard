@@ -43,23 +43,41 @@ func printBanner() {
 	fmt.Println(banner)
 	fmt.Printf("By ToluBanji - ToluGIT | version: %s\n", version)
 	
-	// Simulate an update check for demonstration purposes
-	// This would be replaced with actual update check logic in the future
-	latestVersion := "0.3.1"
-	if version != latestVersion {
-		fmt.Printf("Update available %s -> %s\n", version, latestVersion)
-	}
+	// Note: Update notification disabled as requested
 	
 	fmt.Println() // Add a blank line after the banner for better readability
 }
 
 func main() {
-	printBanner()
+	// Only print the banner if not using a machine-readable output format
+	if !isNonInteractiveMode() {
+		printBanner()
+	}
 	
 	if err := newRootCmd().Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// isNonInteractiveMode determines if we're running in a non-interactive mode
+// where we should skip printing the banner (like JSON output)
+func isNonInteractiveMode() bool {
+	for _, arg := range os.Args {
+		if arg == "--format=json" || arg == "-f=json" || arg == "-f" || arg == "--format" {
+			// Check the next argument if this is -f or --format
+			if arg == "-f" || arg == "--format" {
+				for i, a := range os.Args {
+					if a == arg && i < len(os.Args)-1 && os.Args[i+1] == "json" {
+						return true
+					}
+				}
+			} else {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func newRootCmd() *cobra.Command {

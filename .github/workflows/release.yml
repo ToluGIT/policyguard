@@ -93,6 +93,9 @@ jobs:
         ./build/policyguard-linux-amd64 scan examples/terraform/insecure_s3.tf --fail-on-error || echo "Expected to find violations"
         ./build/policyguard-linux-amd64 scan examples/opentofu/s3_insecure.tofu --fail-on-error || echo "Expected to find violations"
         
+        # Test JSON output format but don't validate with jq to avoid potential formatting issues
+        ./build/policyguard-linux-amd64 scan examples/terraform/insecure_s3.tf --format json > results.json
+        
         # Test policy listing
         ./build/policyguard-linux-amd64 policy list
     
