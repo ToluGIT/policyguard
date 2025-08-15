@@ -49,6 +49,11 @@ func (m *mockEngine) GetLoadedPolicies() []string {
 	return []string{"test-policy"}
 }
 
+// WithSeverityConfig implements the policy.Engine interface
+func (m *mockEngine) WithSeverityConfig(configPath string) error {
+	return nil
+}
+
 // Mock reporter
 type mockReporter struct {
 	report *types.Report
