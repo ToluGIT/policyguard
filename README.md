@@ -430,26 +430,6 @@ repos:
 
 ## Development
 
-### Project Structure
-
-```
-policyguard/
-├── cmd/
-│   └── policyguard/    # CLI application
-├── pkg/
-│   ├── analyzer/       # Core analysis logic
-│   ├── parser/         # IaC file parsers
-│   │   └── terraform/  # Terraform HCL parser
-│   ├── policy/         # Policy engine (OPA integration)
-│   ├── remediation/    # Remediation suggestions
-│   ├── reporter/       # Report generation
-│   └── types/          # Common types
-├── policies/           # Default security policies
-│   └── aws/           # AWS-specific policies
-├── examples/          # Example configurations
-└── tests/             # Test files
-```
-
 ### Building from Source
 
 ```bash
@@ -513,7 +493,7 @@ make coverage
 
 ## Contributing
 
-Contributions are supported! Please see [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions are supported! (especially adding more rules for other CSPs) Please see [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### How to Contribute
 
@@ -523,26 +503,11 @@ Contributions are supported! Please see [Contributing Guide](CONTRIBUTING.md) fo
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-### Code of Conduct
-
-Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
 - [Open Policy Agent](https://www.openpolicyagent.org/) for the policy engine
 - [HashiCorp HCL](https://github.com/hashicorp/hcl) for Terraform parsing
 - [Cobra](https://github.com/spf13/cobra) for CLI framework
-
-## Additional Resources
-
-- [Policy Writing Guide](docs/POLICY_GUIDE.md)
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
-- [API Documentation](docs/API.md)
-- [Security Best Practices](docs/SECURITY.md)
-- [Policy Severity Configuration](docs/SEVERITY_CONFIG.md)
 
 
