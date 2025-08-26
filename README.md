@@ -34,9 +34,8 @@ PolicyGuard is a security policy engine for Infrastructure as Code (IaC) that he
 - [Contributing](#contributing)
 
 
-## Demo Video
-
-[](policyguard.mp4)
+## Demo (Click Below)
+[![Watch the demo](policyguard-thumbnail.png)](policyguard.mp4)
 
 ## Installation
 
@@ -57,7 +56,7 @@ sudo mv policyguard /usr/local/bin/
 ### Using Go Install
 
 ```bash
-go install github.com/ToluGIT/policyguard/cmd/policyguard@v0.3.0
+go install github.com/ToluGIT/policyguard/cmd/policyguard@v0.3.1
 ```
 
 ### Prerequisites
