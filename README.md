@@ -10,7 +10,7 @@ PolicyGuard is a security policy engine for Infrastructure as Code (IaC) that he
 
 ## Features
 
-- **Terraform & OpenTofu Support**: Parse both Terraform and OpenTofu configuration files
+- **Terraform Support**: Parse both Terraform and OpenTofu configuration files
 - **Module Support**: Analyze resources within Terraform modules
 - **Variable Interpolation**: Handle variable references and interpolation in Terraform files
 - **Policy Severity Customization**: Adjust severity levels to match organizational priorities
@@ -34,9 +34,8 @@ PolicyGuard is a security policy engine for Infrastructure as Code (IaC) that he
 - [Contributing](#contributing)
 
 
-## Demo (Click Below)
-[![Watch the demo](policyguard-thumbnail.png)](policyguard.mp4)
-
+## Demo
+[![Watch the video](https://raw.githubusercontent.com/ToluGIT/policyguard/main/policyguard-thumbnail.png)](https://raw.githubusercontent.com/ToluGIT/policyguard/main/policyguard.mp4)
 ## Installation
 
 ### From Source
