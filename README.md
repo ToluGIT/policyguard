@@ -391,7 +391,7 @@ jobs:
           go-version: '1.21'
       
       - name: Install PolicyGuard
-        run: go install github.com/ToluGIT/policyguard/cmd/policyguard@v0.2.0
+        run: go install github.com/ToluGIT/policyguard/cmd/policyguard@v0.3.1
       
       - name: Run Security Scan
         run: policyguard scan . --fail-on-error --format sarif --output results.sarif
@@ -408,7 +408,7 @@ jobs:
 security-scan:
   stage: test
   script:
-    - go install github.com/ToluGIT/policyguard/cmd/policyguard@v0.2.0
+    - go install github.com/ToluGIT/policyguard/cmd/policyguard@v0.3.1
     - policyguard scan . --fail-on-error --format junit --output report.xml
   artifacts:
     reports:
