@@ -1,0 +1,88 @@
+{
+  "description": "Independent ground-truth labels for the PolicyGuard benchmark corpus. Each expected entry is the SME's judgment of a genuine misconfiguration a knowledgeable cloud-security reviewer would flag, decided by reading the .tf BEFORE running PolicyGuard. Precision/recall are measured by comparing PolicyGuard's findings to these labels, scoped to core_policies. Findings for policies outside core_policies are ignored (not counted as FP) so the number reflects the unambiguous core-security set, not opinionated style/tagging checks.",
+  "match_key": "file + resource_id + policy_id",
+  "core_policies": [
+    "s3_bucket_encryption",
+    "s3_bucket_logging",
+    "s3_bucket_public_access",
+    "ec2_instance_public_ip",
+    "ec2_instance_encryption",
+    "ec2_instance_imdsv2",
+    "ebs_volume_encryption",
+    "security_group_ssh_open",
+    "security_group_unrestricted",
+    "rds_encryption_required",
+    "rds_no_public_access",
+    "rds_backup_required",
+    "azure_storage_https_only",
+    "azure_storage_min_tls",
+    "azure_storage_public_access",
+    "azure_nsg_admin_ports",
+    "azure_sql_public_access",
+    "azure_sql_min_tls"
+  ],
+  "files": {
+    "s3_insecure.tf": {
+      "expected": [
+        { "resource_id": "aws_s3_bucket.public_unencrypted", "policy_id": "s3_bucket_encryption" },
+        { "resource_id": "aws_s3_bucket.public_unencrypted", "policy_id": "s3_bucket_logging" },
+        { "resource_id": "aws_s3_bucket.public_unencrypted", "policy_id": "s3_bucket_public_access" },
+        { "resource_id": "aws_s3_bucket_public_access_block.wide_open", "policy_id": "s3_bucket_public_access" }
+      ]
+    },
+    "ec2_sg_insecure.tf": {
+      "expected": [
+        { "resource_id": "aws_instance.exposed", "policy_id": "ec2_instance_public_ip" },
+        { "resource_id": "aws_instance.exposed", "policy_id": "ec2_instance_imdsv2" },
+        { "resource_id": "aws_instance.exposed", "policy_id": "ec2_instance_encryption" },
+        { "resource_id": "aws_security_group.ssh_to_world", "policy_id": "security_group_ssh_open" },
+        { "resource_id": "aws_security_group.all_open", "policy_id": "security_group_ssh_open" },
+        { "resource_id": "aws_security_group.all_open", "policy_id": "security_group_unrestricted" }
+      ]
+    },
+    "rds_insecure.tf": {
+      "expected": [
+        { "resource_id": "aws_db_instance.exposed", "policy_id": "rds_encryption_required" },
+        { "resource_id": "aws_db_instance.exposed", "policy_id": "rds_no_public_access" },
+        { "resource_id": "aws_db_instance.exposed", "policy_id": "rds_backup_required" }
+      ]
+    },
+    "secure_inline.tf": {
+      "expected": []
+    },
+    "s3_partial_secure.tf": {
+      "expected": [
+        { "resource_id": "aws_s3_bucket.partial", "policy_id": "s3_bucket_public_access" }
+      ],
+      "note": "Encryption and logging are correctly configured inline; only the public ACL is a real finding. Tests that the secured dimensions are not over-reported."
+    },
+    "out_of_scope_clean.tf": {
+      "expected": [],
+      "note": "SNS/SQS/CloudWatch resources in reasonable configs. No core-policy finding expected; out-of-scope tagging/DLQ findings are ignored by the core scope."
+    },
+    "s3_split_resource_secure.tf": {
+      "expected": [],
+      "note": "Correctly secured via split resources (aws_s3_bucket_server_side_encryption_configuration / aws_s3_bucket_logging). The S3 policies now recognize these siblings, so zero findings are expected. Kept as a true negative guarding against regressing the split-resource fix."
+    },
+    "ec2_bare_insecure.tf": {
+      "expected": [
+        { "resource_id": "aws_instance.bare", "policy_id": "ec2_instance_imdsv2" }
+      ],
+      "note": "IMDSv1-by-default is insecure and should be flagged. PolicyGuard's != \"required\" check misses the absent-block case, so this is expected to surface as a false negative until the policy handles absence."
+    },
+    "azure_insecure.tf": {
+      "expected": [
+        { "resource_id": "azurerm_storage_account.exposed", "policy_id": "azure_storage_https_only" },
+        { "resource_id": "azurerm_storage_account.exposed", "policy_id": "azure_storage_min_tls" },
+        { "resource_id": "azurerm_storage_account.exposed", "policy_id": "azure_storage_public_access" },
+        { "resource_id": "azurerm_network_security_group.exposed", "policy_id": "azure_nsg_admin_ports" },
+        { "resource_id": "azurerm_mssql_server.exposed", "policy_id": "azure_sql_public_access" },
+        { "resource_id": "azurerm_mssql_server.exposed", "policy_id": "azure_sql_min_tls" }
+      ]
+    },
+    "azure_secure.tf": {
+      "expected": [],
+      "note": "Securely configured Azure resources, including the azurerm v4 attribute name, reliance on Azure secure defaults, and a multi-rule NSG with admin access restricted to a CIDR. Zero findings expected."
+    }
+  }
+}

@@ -8,22 +8,30 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ToluGIT/policyguard/pkg/logger"
+	"github.com/ToluGIT/policyguard/pkg/types"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/ToluGIT/policyguard/pkg/logger"
-	"github.com/ToluGIT/policyguard/pkg/types"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
 
 // Parser implements the parser.Parser interface for Terraform files
 type Parser struct {
-	parser     *hclparse.Parser
-	variables  map[string]cty.Value      // Store extracted variables
-	functions  map[string]function.Function // Standard Terraform functions
-	evalContext *hcl.EvalContext       // Evaluation context for variables and functions
-	log       *logger.Logger          // Logger for debug output
+	parser      *hclparse.Parser
+	variables   map[string]cty.Value         // Store extracted variables
+	functions   map[string]function.Function // Standard Terraform functions
+	evalContext *hcl.EvalContext             // Evaluation context for variables and functions
+	log         *logger.Logger               // Logger for debug output
+
+	// confineRoot, when non-empty, restricts local module resolution to this
+	// directory tree. A `module { source = "../../elsewhere" }` that resolves
+	// outside the root is skipped rather than followed. The web GUI sets this to
+	// the per-request upload dir so uploaded Terraform cannot make the server
+	// read host-local module directories (the CLI leaves it empty, since a real
+	// project legitimately references sibling module dirs).
+	confineRoot string
 }
 
 // New creates a new Terraform parser
@@ -39,10 +47,10 @@ func New() *Parser {
 		},
 		log: logger.Default(),
 	}
-	
+
 	// Initialize the evaluation context
 	p.initEvalContext()
-	
+
 	return p
 }
 
@@ -50,6 +58,38 @@ func New() *Parser {
 func (p *Parser) WithLogger(log *logger.Logger) *Parser {
 	p.log = log
 	return p
+}
+
+// WithConfinedRoot restricts local module resolution to the given directory
+// tree: a relative module source that resolves outside root is skipped instead
+// of followed. Used by the web GUI to keep uploaded Terraform from reading
+// host-local directories via `../` module sources. An empty root disables
+// confinement (the default, for CLI use).
+func (p *Parser) WithConfinedRoot(root string) *Parser {
+	if root != "" {
+		if abs, err := filepath.Abs(root); err == nil {
+			root = abs
+		}
+	}
+	p.confineRoot = root
+	return p
+}
+
+// withinConfineRoot reports whether candidate is inside the configured
+// confinement root. With no root set, everything is allowed (CLI behavior).
+func (p *Parser) withinConfineRoot(candidate string) bool {
+	if p.confineRoot == "" {
+		return true
+	}
+	abs, err := filepath.Abs(candidate)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(p.confineRoot, abs)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // TerraformVariable represents a Terraform variable declaration
@@ -65,7 +105,7 @@ type TerraformVariable struct {
 func (p *Parser) initEvalContext() {
 	// Initialize standard Terraform functions (minimal set for now)
 	// TODO: Add more standard Terraform functions as needed
-	
+
 	// Update the evaluation context
 	p.evalContext.Variables = p.variables
 	p.evalContext.Functions = p.functions
@@ -93,7 +133,7 @@ func (p *Parser) Parse(ctx context.Context, filePath string) ([]types.Resource, 
 	if diags.HasErrors() {
 		return nil, fmt.Errorf("failed to parse file: %s", diags.Error())
 	}
-	
+
 	// If this is a variables.tf file, extract variables first
 	if strings.Contains(filepath.Base(filePath), "variables") {
 		err = p.extractVariablesFromFile(file, filePath)
@@ -113,7 +153,7 @@ func (p *Parser) ParseDirectory(ctx context.Context, dirPath string) ([]types.Re
 	// Reset the variable map for this directory
 	p.variables = make(map[string]cty.Value)
 	p.evalContext.Variables = p.variables
-	
+
 	// Collect all supported file patterns
 	patterns := []string{
 		"*.tf",
@@ -137,17 +177,17 @@ func (p *Parser) ParseDirectory(ctx context.Context, dirPath string) ([]types.Re
 		// Log warning but continue with parsing
 		p.log.Warn("Error extracting variables: %v", err)
 	}
-	
+
 	var allResources []types.Resource
 	var moduleResources []types.Resource
-	
+
 	// Second pass: extract all resources and identify modules (with variable resolution)
 	for _, file := range allFiles {
 		resources, err := p.Parse(ctx, file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse %s: %w", file, err)
 		}
-		
+
 		for _, resource := range resources {
 			if resource.Type == "module" {
 				moduleResources = append(moduleResources, resource)
@@ -158,17 +198,17 @@ func (p *Parser) ParseDirectory(ctx context.Context, dirPath string) ([]types.Re
 			}
 		}
 	}
-	
+
 	// Third pass: process modules and extract their resources
 	resolvedModuleResources, err := p.resolveModules(ctx, moduleResources, dirPath)
 	if err != nil {
 		// Log the error but don't fail the entire parsing
 		p.log.Warn("Error resolving modules: %v", err)
 	}
-	
+
 	// Add resolved module resources to the result
 	allResources = append(allResources, resolvedModuleResources...)
-	
+
 	return allResources, nil
 }
 
@@ -180,15 +220,15 @@ func (p *Parser) extractVariables(ctx context.Context, files []string) error {
 		if !isLikelyToContainVariables(file) {
 			continue
 		}
-		
+
 		content, err := ioutil.ReadFile(file)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", file, err)
 		}
-		
+
 		var hclFile *hcl.File
 		var diags hcl.Diagnostics
-		
+
 		// Parse the file based on its extension
 		if strings.HasSuffix(file, ".tf.json") || strings.HasSuffix(file, ".tofu.json") {
 			hclFile, diags = p.parser.ParseJSON(content, file)
@@ -197,21 +237,21 @@ func (p *Parser) extractVariables(ctx context.Context, files []string) error {
 		} else {
 			continue // Skip unsupported files
 		}
-		
+
 		if diags.HasErrors() {
 			return fmt.Errorf("failed to parse file for variables: %s", diags.Error())
 		}
-		
+
 		// Extract variables from the file
 		err = p.extractVariablesFromFile(hclFile, file)
 		if err != nil {
 			return fmt.Errorf("failed to extract variables from %s: %w", file, err)
 		}
 	}
-	
+
 	// Update the evaluation context with the extracted variables
 	p.updateEvalContext()
-	
+
 	return nil
 }
 
@@ -224,16 +264,16 @@ func isLikelyToContainVariables(filePath string) bool {
 		"vars.tf",
 		"inputs.tf",
 	}
-	
+
 	fileName := filepath.Base(filePath)
-	
+
 	// Check against common variable file patterns
 	for _, pattern := range patterns {
 		if strings.Contains(fileName, pattern) {
 			return true
 		}
 	}
-	
+
 	// Check if it's a Terraform/OpenTofu file (might still contain variable declarations)
 	return strings.HasSuffix(filePath, ".tf") || strings.HasSuffix(filePath, ".tofu")
 }
@@ -251,25 +291,25 @@ func (p *Parser) extractVariablesFromFile(file *hcl.File, filePath string) error
 					p.log.Warn("Failed to extract variable %s: %v", varName, err)
 					continue
 				}
-				
+
 				// Store the variable
 				p.variables[varName] = varValue
 			}
 		}
 		return nil
 	}
-	
+
 	// Extract variables from JSON files (.tf.json, .tofu.json)
 	content, _, diags := file.Body.PartialContent(&hcl.BodySchema{
 		Blocks: []hcl.BlockHeaderSchema{
 			{Type: "variable", LabelNames: []string{"name"}},
 		},
 	})
-	
+
 	if diags.HasErrors() {
 		return fmt.Errorf("failed to parse content for variables: %s", diags.Error())
 	}
-	
+
 	for _, block := range content.Blocks {
 		if block.Type == "variable" && len(block.Labels) > 0 {
 			varName := block.Labels[0]
@@ -279,12 +319,12 @@ func (p *Parser) extractVariablesFromFile(file *hcl.File, filePath string) error
 				p.log.Warn("Failed to extract variable %s from JSON: %v", varName, err)
 				continue
 			}
-			
+
 			// Store the variable
 			p.variables[varName] = varValue
 		}
 	}
-	
+
 	return nil
 }
 
@@ -292,7 +332,7 @@ func (p *Parser) extractVariablesFromFile(file *hcl.File, filePath string) error
 func (p *Parser) extractVariableFromHCLBlock(block *hclsyntax.Block) (cty.Value, error) {
 	// Default to unknown value
 	result := cty.DynamicVal
-	
+
 	// Check for default value attribute
 	if defaultAttr, ok := block.Body.Attributes["default"]; ok {
 		val, diags := defaultAttr.Expr.Value(nil)
@@ -300,7 +340,7 @@ func (p *Parser) extractVariableFromHCLBlock(block *hclsyntax.Block) (cty.Value,
 			result = val
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -308,13 +348,13 @@ func (p *Parser) extractVariableFromHCLBlock(block *hclsyntax.Block) (cty.Value,
 func (p *Parser) extractVariableFromJSONBlock(block *hcl.Block) (cty.Value, error) {
 	// Default to unknown value
 	result := cty.DynamicVal
-	
+
 	// Extract attributes from the block body
 	attrs, diags := block.Body.JustAttributes()
 	if diags.HasErrors() {
 		return result, fmt.Errorf("failed to extract variable attributes: %s", diags.Error())
 	}
-	
+
 	// Check for default value attribute
 	if defaultAttr, ok := attrs["default"]; ok {
 		val, diags := defaultAttr.Expr.Value(nil)
@@ -322,7 +362,7 @@ func (p *Parser) extractVariableFromJSONBlock(block *hcl.Block) (cty.Value, erro
 			result = val
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -330,15 +370,15 @@ func (p *Parser) extractVariableFromJSONBlock(block *hcl.Block) (cty.Value, erro
 func (p *Parser) updateEvalContext() {
 	// Create the variables map structure for HCL evaluation
 	vars := make(map[string]cty.Value)
-	
+
 	// Add var namespace for variable references
 	varMap := make(map[string]cty.Value)
 	for k, v := range p.variables {
 		varMap[k] = v
-		
+
 		// No debug output for extracted variables - disabled to prevent verbosity
 	}
-	
+
 	// Only create the object if we have variables
 	if len(varMap) > 0 {
 		// Try to create the object value
@@ -350,7 +390,7 @@ func (p *Parser) updateEvalContext() {
 			vars["var"] = objectVal
 		}
 	}
-	
+
 	// Update the evaluation context
 	p.evalContext.Variables = vars
 }
@@ -358,7 +398,7 @@ func (p *Parser) updateEvalContext() {
 // resolveModules attempts to resolve and parse resources from module sources
 func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, basePath string) ([]types.Resource, error) {
 	var moduleResources []types.Resource
-	
+
 	for _, module := range modules {
 		// Get module source path
 		source, ok := module.Attributes["source"].(string)
@@ -367,29 +407,29 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 			p.log.Warn("Module %s has no source attribute, skipping", module.Name)
 			continue
 		}
-		
+
 		// Extract module variables from attributes
 		moduleVars := make(map[string]interface{})
 		securityCriticalVars := make(map[string]interface{})
-		
+
 		// First pass: collect all module variables
 		for key, val := range module.Attributes {
 			if key != "source" && !strings.HasPrefix(key, "_") {
 				moduleVars[key] = val
 			}
 		}
-		
+
 		// Second pass: identify security-critical variables and create markers
 		for key, val := range moduleVars {
 			// Track security-critical variables separately for direct propagation
 			if p.isSecurityCriticalVariable(key, val) {
 				securityCriticalVars[key] = val
 				p.log.Debug("Found security-critical variable %s in module %s", key, module.Name)
-				
+
 				// Process conditional expressions specially
-				if condMap, isCond := val.(map[string]interface{}); isCond && 
-				   condMap["_type"] == "conditional_expression" {
-					
+				if condMap, isCond := val.(map[string]interface{}); isCond &&
+					condMap["_type"] == "conditional_expression" {
+
 					// Get the security value for conditional expressions
 					if secVal, hasSec := condMap["_security_value"]; hasSec {
 						// Special handling based on variable name and value
@@ -420,7 +460,7 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 					}
 					continue // Already handled conditional expression
 				}
-				
+
 				// For explicit boolean security settings, pre-process for policy detection
 				if boolVal, isBool := val.(bool); isBool {
 					switch key {
@@ -446,7 +486,7 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 						}
 					}
 				}
-				
+
 				// Handle numeric values like backup_retention_period
 				if numVal, isNum := val.(float64); isNum {
 					if key == "backup_retention_period" && numVal == 0 {
@@ -454,7 +494,7 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 						p.log.Debug("Found backup_retention_period=0 in module %s", module.Name)
 					}
 				}
-				
+
 				// Handle slices like enabled_cloudwatch_logs_exports
 				if arr, isArr := val.([]interface{}); isArr {
 					if key == "enabled_cloudwatch_logs_exports" && len(arr) == 0 {
@@ -462,12 +502,12 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 						p.log.Debug("Found empty enabled_cloudwatch_logs_exports in module %s", module.Name)
 					}
 				}
-				
+
 				// Handle variable references
 				if varRef, isStr := val.(string); isStr && strings.HasPrefix(varRef, "[var.") {
 					varName := strings.TrimPrefix(strings.TrimSuffix(varRef, "]"), "[var.")
 					p.log.Debug("Found variable reference %s in module variable %s", varName, key)
-					
+
 					// Handle common patterns for conditional security variables
 					if key == "publicly_accessible" && strings.Contains(varRef, "!var.") {
 						// Likely a negated boolean variable like !var.production_mode which is insecure
@@ -481,41 +521,49 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 				}
 			}
 		}
-		
+
 		// Log module parsing information
 		p.log.Debug("Processing module %s with source %s", module.Name, source)
 		p.log.Debug("Module %s has %d security markers", module.Name, len(securityCriticalVars))
-		
+
 		// Handle local modules (starting with ./ or ../)
 		if strings.HasPrefix(source, "./") || strings.HasPrefix(source, "../") {
 			// Resolve relative path
 			modulePath := filepath.Join(basePath, source)
-			
+
+			// In confined mode (web GUI), refuse to follow a module source that
+			// escapes the sandbox root — otherwise uploaded Terraform could make
+			// the server read host-local directories via `../../`.
+			if !p.withinConfineRoot(modulePath) {
+				p.log.Warn("Module %s source %q resolves outside the allowed root; skipping", module.Name, source)
+				continue
+			}
+
 			// Check if the path exists
 			if _, err := os.Stat(modulePath); os.IsNotExist(err) {
 				// Module path doesn't exist, log and skip
 				p.log.Warn("Module path does not exist: %s", modulePath)
 				continue
 			}
-			
+
 			p.log.Debug("Found module at path: %s", modulePath)
-			
+
 			// Create a special security map to pass to the module parser
 			// that contains BOTH the original variables and the enhanced security markers
 			enhancedSecurityVars := make(map[string]interface{})
-			
+
 			// Copy all security-critical variables
 			for k, v := range securityCriticalVars {
 				enhancedSecurityVars[k] = v
 			}
-			
+
 			// Copy security-relevant original variables as well
 			for k, v := range moduleVars {
 				if p.isSecurityCriticalVariable(k, v) {
 					enhancedSecurityVars[k] = v
 				}
 			}
-			
+
 			// Parse module directory with variables and pre-processed security attributes
 			resources, err := p.ParseModuleWithVars(ctx, modulePath, module.Name, moduleVars, enhancedSecurityVars)
 			if err != nil {
@@ -523,14 +571,14 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 				p.log.Warn("Failed to parse module %s: %v", module.Name, err)
 				continue
 			}
-			
+
 			// Log the detected security issues
 			for marker, _ := range securityCriticalVars {
 				if strings.HasPrefix(marker, "_security_") {
 					p.log.Debug("Module %s has security marker: %s", module.Name, marker)
 				}
 			}
-			
+
 			moduleResources = append(moduleResources, resources...)
 			p.log.Debug("Parsed %d resources from module %s", len(resources), module.Name)
 		} else {
@@ -539,7 +587,7 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 			p.log.Debug("Note: Skipping remote module %s with source %s", module.Name, source)
 		}
 	}
-	
+
 	return moduleResources, nil
 }
 
@@ -547,15 +595,15 @@ func (p *Parser) resolveModules(ctx context.Context, modules []types.Resource, b
 func (p *Parser) ParseModuleWithVars(ctx context.Context, modulePath, moduleName string, moduleVars map[string]interface{}, precalculatedSecurityVars ...map[string]interface{}) ([]types.Resource, error) {
 	// Create a new parser with combined variables
 	moduleParser := New()
-	
+
 	// Copy parent variables to the module parser
 	for k, v := range p.variables {
 		moduleParser.variables[k] = v
 	}
-	
+
 	// Track security-critical variables for enhanced analysis
 	securityCriticalVars := make(map[string]interface{})
-	
+
 	// If precalculated security variables were provided, use them
 	// This allows the caller to preprocess security markers based on module inputs
 	if len(precalculatedSecurityVars) > 0 && precalculatedSecurityVars[0] != nil {
@@ -566,7 +614,7 @@ func (p *Parser) ParseModuleWithVars(ctx context.Context, modulePath, moduleName
 			}
 		}
 	}
-	
+
 	// Add module-specific variables
 	for k, v := range moduleVars {
 		// Convert to cty.Value for Terraform evaluation
@@ -574,11 +622,11 @@ func (p *Parser) ParseModuleWithVars(ctx context.Context, modulePath, moduleName
 		if err == nil {
 			moduleParser.variables[k] = ctyVal
 		}
-		
+
 		// Process security-critical variables specially if not already processed
 		if p.isSecurityCriticalVariable(k, v) && len(precalculatedSecurityVars) == 0 {
 			securityCriticalVars[k] = v
-			
+
 			// For boolean security settings, retain the worst-case scenario for security analysis
 			if condMap, ok := v.(map[string]interface{}); ok && condMap["_type"] == "conditional_expression" {
 				if secVal, ok := condMap["_security_value"]; ok {
@@ -587,54 +635,54 @@ func (p *Parser) ParseModuleWithVars(ctx context.Context, modulePath, moduleName
 			}
 		}
 	}
-	
+
 	// Update the evaluation context
 	moduleParser.updateEvalContext()
-	
+
 	// Parse module directory
 	p.log.Debug("Parsing module at %s with %d security critical vars", modulePath, len(securityCriticalVars))
 	resources, err := moduleParser.ParseDirectory(ctx, modulePath)
-	
+
 	// Handle parsing error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	p.log.Debug("Found %d resources in module %s", len(resources), moduleName)
-	
+
 	// Add module context to resources
 	for i := range resources {
 		// Skip module resources to avoid infinite recursion
 		if resources[i].Type == "module" {
 			continue
 		}
-		
+
 		// Update resource ID to include module prefix
 		resources[i].ID = fmt.Sprintf("module.%s.%s", moduleName, resources[i].ID)
-		
+
 		// Add module information to attributes
 		if resources[i].Attributes == nil {
 			resources[i].Attributes = make(map[string]interface{})
 		}
 		resources[i].Attributes["_module_name"] = moduleName
 		resources[i].Attributes["_module_path"] = modulePath
-		
+
 		// Add a copy of module variables for security context
 		moduleVarsCopy := make(map[string]interface{})
 		for k, v := range moduleVars {
 			moduleVarsCopy[k] = v
 		}
 		resources[i].Attributes["_module_vars"] = moduleVarsCopy
-		
+
 		// Add enhanced security context
 		resources[i].Attributes["_security_critical_vars"] = securityCriticalVars
-		
+
 		// Important: Add the security markers directly to the RDS resources
-		if strings.HasPrefix(resources[i].Type, "aws_db_instance") || 
-		   strings.HasPrefix(resources[i].Type, "aws_rds_cluster") {
+		if strings.HasPrefix(resources[i].Type, "aws_db_instance") ||
+			strings.HasPrefix(resources[i].Type, "aws_rds_cluster") {
 			// Log that we found an RDS resource in the module
 			p.log.Debug("Found RDS resource %s in module %s", resources[i].ID, moduleName)
-			
+
 			// Add all security markers directly to the resource attributes for policy detection
 			for k, v := range securityCriticalVars {
 				if strings.HasPrefix(k, "_security_") {
@@ -642,7 +690,7 @@ func (p *Parser) ParseModuleWithVars(ctx context.Context, modulePath, moduleName
 					p.log.Debug("Adding security marker %s = %v to RDS resource %s", k, v, resources[i].ID)
 				}
 			}
-			
+
 			// Make sure critical security variables are directly accessible to OPA policies
 			// by explicitly adding special markers based on module inputs
 			if val, exists := moduleVars["publicly_accessible"]; exists {
@@ -651,35 +699,35 @@ func (p *Parser) ParseModuleWithVars(ctx context.Context, modulePath, moduleName
 					p.log.Debug("Direct security marker: _security_publicly_accessible = true for %s", resources[i].ID)
 				}
 			}
-			
+
 			if val, exists := moduleVars["storage_encrypted"]; exists {
 				if boolVal, isBool := val.(bool); isBool && boolVal == false {
 					resources[i].Attributes["_security_unencrypted"] = true
 					p.log.Debug("Direct security marker: _security_unencrypted = true for %s", resources[i].ID)
 				}
 			}
-			
+
 			if val, exists := moduleVars["backup_retention_period"]; exists {
 				if numVal, isNum := val.(float64); isNum && numVal == 0 {
 					resources[i].Attributes["_security_no_backup"] = true
 					p.log.Debug("Direct security marker: _security_no_backup = true for %s", resources[i].ID)
 				}
 			}
-			
+
 			if val, exists := moduleVars["iam_database_authentication_enabled"]; exists {
 				if boolVal, isBool := val.(bool); isBool && boolVal == false {
 					resources[i].Attributes["_security_no_iam_auth"] = true
 					p.log.Debug("Direct security marker: _security_no_iam_auth = true for %s", resources[i].ID)
 				}
 			}
-			
+
 			if val, exists := moduleVars["deletion_protection"]; exists {
 				if boolVal, isBool := val.(bool); isBool && boolVal == false {
 					resources[i].Attributes["_security_no_deletion_protection"] = true
 					p.log.Debug("Direct security marker: _security_no_deletion_protection = true for %s", resources[i].ID)
 				}
 			}
-			
+
 			if val, exists := moduleVars["enabled_cloudwatch_logs_exports"]; exists {
 				if arr, isArr := val.([]interface{}); isArr && len(arr) == 0 {
 					resources[i].Attributes["_security_no_log_exports"] = true
@@ -694,11 +742,11 @@ func (p *Parser) ParseModuleWithVars(ctx context.Context, modulePath, moduleName
 				}
 			}
 		}
-		
+
 		// Apply enhanced variable resolution for security-critical attributes
 		p.enhanceSecurityAttributesFromModuleVars(resources[i], moduleVars)
 	}
-	
+
 	return resources, nil
 }
 
@@ -744,7 +792,7 @@ func (p *Parser) convertToCtyValue(value interface{}) (cty.Value, error) {
 			}
 			return cty.DynamicVal, nil
 		}
-		
+
 		// Regular map
 		vals := make(map[string]cty.Value)
 		for k, elem := range v {
@@ -815,7 +863,7 @@ func (p *Parser) extractResources(file *hcl.File, filePath string) ([]types.Reso
 			{Type: "module", LabelNames: []string{"name"}},
 		},
 	})
-	
+
 	if diags.HasErrors() {
 		return nil, fmt.Errorf("failed to parse content: %s", diags.Error())
 	}
@@ -846,7 +894,7 @@ func (p *Parser) extractResources(file *hcl.File, filePath string) ([]types.Reso
 			resources = append(resources, *moduleInfo)
 		}
 	}
-	
+
 	return resources, nil
 }
 
@@ -861,7 +909,7 @@ func (p *Parser) extractResource(block *hclsyntax.Block, filePath string) (*type
 	provider := strings.Split(resourceType, "_")[0]
 
 	attributes := make(map[string]interface{})
-	
+
 	// Extract attributes
 	for name, attr := range block.Body.Attributes {
 		val, err := p.extractAttributeValue(attr)
@@ -881,7 +929,7 @@ func (p *Parser) extractResource(block *hclsyntax.Block, filePath string) (*type
 		}
 		blocksByType[nestedBlock.Type] = append(blocksByType[nestedBlock.Type], nestedAttrs)
 	}
-	
+
 	// Add blocks to attributes - certain types should always be arrays
 	for blockType, blocks := range blocksByType {
 		// Always use arrays for ingress/egress rules and similar repeatable blocks
@@ -921,7 +969,7 @@ func (p *Parser) extractDataSource(block *hclsyntax.Block, filePath string) (*ty
 	provider := strings.Split(dataType, "_")[0]
 
 	attributes := make(map[string]interface{})
-	
+
 	// Extract attributes
 	for name, attr := range block.Body.Attributes {
 		val, err := p.extractAttributeValue(attr)
@@ -930,7 +978,7 @@ func (p *Parser) extractDataSource(block *hclsyntax.Block, filePath string) (*ty
 		}
 		attributes[name] = val
 	}
-	
+
 	// Extract nested blocks for data sources too
 	blocksByType := make(map[string][]map[string]interface{})
 	for _, nestedBlock := range block.Body.Blocks {
@@ -940,7 +988,7 @@ func (p *Parser) extractDataSource(block *hclsyntax.Block, filePath string) (*ty
 		}
 		blocksByType[nestedBlock.Type] = append(blocksByType[nestedBlock.Type], nestedAttrs)
 	}
-	
+
 	// Add blocks to attributes - single blocks as objects, multiple as arrays
 	for blockType, blocks := range blocksByType {
 		if len(blocks) == 1 {
@@ -969,14 +1017,14 @@ func (p *Parser) extractDataSource(block *hclsyntax.Block, filePath string) (*ty
 // extractNestedBlock extracts attributes from a nested block
 func (p *Parser) extractNestedBlock(block *hclsyntax.Block) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
-	
+
 	// Check if this is a dynamic block
 	if block.Type == "dynamic" && len(block.Labels) > 0 {
 		// Extract the dynamic block type (e.g., "server_side_encryption_configuration")
 		dynamicBlockType := block.Labels[0]
 		result["_is_dynamic"] = true
 		result["_dynamic_type"] = dynamicBlockType
-		
+
 		// Extract for_each condition
 		forEachAttr, hasForEach := block.Body.Attributes["for_each"]
 		if hasForEach {
@@ -985,24 +1033,24 @@ func (p *Parser) extractNestedBlock(block *hclsyntax.Block) (map[string]interfac
 			if err == nil {
 				result["_for_each"] = forEachVal
 			}
-			
+
 			// Check for conditional expressions in for_each
 			if conditional, ok := forEachAttr.Expr.(*hclsyntax.ConditionalExpr); ok {
 				result["_conditional_for_each"] = true
-				
+
 				// Extract both possible values
 				trueBranch, _ := p.extractGenericExpression(conditional.TrueResult)
 				falseBranch, _ := p.extractGenericExpression(conditional.FalseResult)
-				
+
 				result["_true_branch"] = trueBranch
 				result["_false_branch"] = falseBranch
-				
+
 				// Try to extract the condition itself
 				condition, _ := p.extractGenericExpression(conditional.Condition)
 				result["_condition"] = condition
 			}
 		}
-		
+
 		// Extract the content template for security analysis
 		// even if condition currently evaluates to false
 		for _, contentBlock := range block.Body.Blocks {
@@ -1012,10 +1060,10 @@ func (p *Parser) extractNestedBlock(block *hclsyntax.Block) (map[string]interfac
 				break
 			}
 		}
-		
+
 		return result, nil
 	}
-	
+
 	// Extract attributes
 	for name, attr := range block.Body.Attributes {
 		val, err := p.extractAttributeValue(attr)
@@ -1044,7 +1092,7 @@ func (p *Parser) extractAttributeValue(attr *hclsyntax.Attribute) (interface{}, 
 	if !diags.HasErrors() {
 		return p.ctyValueToGo(val)
 	}
-	
+
 	// If evaluation with context fails, try direct evaluation
 	val, diags = attr.Expr.Value(nil)
 	if !diags.HasErrors() {
@@ -1052,27 +1100,27 @@ func (p *Parser) extractAttributeValue(attr *hclsyntax.Attribute) (interface{}, 
 	}
 
 	// If direct evaluation fails, check for different expression types
-	
+
 	// Check if it's a function call
 	if funcCall, ok := attr.Expr.(*hclsyntax.FunctionCallExpr); ok {
 		return p.extractFunctionCall(funcCall)
 	}
-	
+
 	// Check if it's a variable reference and try to handle it specially
 	if varRef, ok := attr.Expr.(*hclsyntax.ScopeTraversalExpr); ok {
 		return p.extractVariableReference(varRef)
 	}
-	
+
 	// Check if it's a template expression (string interpolation)
 	if tmpl, ok := attr.Expr.(*hclsyntax.TemplateExpr); ok {
 		return p.extractTemplateExpression(tmpl)
 	}
-	
+
 	// Check if it's a conditional expression
 	if conditional, ok := attr.Expr.(*hclsyntax.ConditionalExpr); ok {
 		return p.extractConditionalExpression(conditional)
 	}
-	
+
 	// Check if it's an operation expression (e.g., var.x + var.y)
 	if operation, ok := attr.Expr.(*hclsyntax.BinaryOpExpr); ok {
 		return p.extractBinaryOperation(operation)
@@ -1095,7 +1143,7 @@ func (p *Parser) extractFunctionCall(funcCall *hclsyntax.FunctionCallExpr) (inte
 			return p.ctyValueToGo(val)
 		}
 	}
-	
+
 	// For other functions or if extraction fails
 	return nil, nil
 }
@@ -1187,19 +1235,47 @@ func (p *Parser) extractAttributeValueFromExpr(expr hcl.Expression) (interface{}
 	// First try evaluation with the variable context
 	val, diags := expr.Value(p.evalContext)
 	if !diags.HasErrors() {
-		return p.ctyValueToGo(val)
+		v, err := p.ctyValueToGo(val)
+		return normalizeReference(v), err
 	}
-	
+
 	// If evaluation with context fails, try direct evaluation
 	val, diags = expr.Value(nil)
 	if !diags.HasErrors() {
-		return p.ctyValueToGo(val)
+		v, err := p.ctyValueToGo(val)
+		return normalizeReference(v), err
 	}
-	
+
 	// Handle special expression types if possible
 	// For JSON files, we don't have access to the specific expression types
 	// so we just return a placeholder for unresolved variables
 	return "[VARIABLE_REFERENCE]", nil
+}
+
+// normalizeReference canonicalizes a JSON-style interpolation that is a single
+// reference, e.g. "${aws_s3_bucket.modern.id}", into the bare dotted path
+// "aws_s3_bucket.modern.id". In HCL these references are parsed as traversals
+// and already render bare (see traversalString); JSON Terraform writes them as
+// "${...}" strings. Normalizing here keeps the two formats' attribute values
+// identical so resource-linking policies behave the same for .tf and .tf.json.
+// Only a value that is exactly one wrapped reference (no surrounding text, no
+// var. reference) is unwrapped; mixed templates like "${var.env}-bucket" are
+// left untouched.
+func normalizeReference(v interface{}) interface{} {
+	s, ok := v.(string)
+	if !ok {
+		return v
+	}
+	if !strings.HasPrefix(s, "${") || !strings.HasSuffix(s, "}") {
+		return v
+	}
+	inner := s[2 : len(s)-1]
+	// Reject anything that isn't a single clean reference path: nested braces,
+	// embedded text/whitespace, or a var.* reference (handled elsewhere).
+	if strings.ContainsAny(inner, "${} \t") || inner == "" || strings.HasPrefix(inner, "var.") {
+		return v
+	}
+	return inner
 }
 
 // extractVariableReference extracts a value from a variable reference expression
@@ -1209,29 +1285,55 @@ func (p *Parser) extractVariableReference(expr *hclsyntax.ScopeTraversalExpr) (i
 	if len(traversal) < 2 {
 		return "[INVALID_VARIABLE_REFERENCE]", nil
 	}
-	
+
 	// Check if this is a var.xxx reference
 	root, ok := traversal[0].(hcl.TraverseRoot)
 	if !ok || root.Name != "var" {
+		// Not a variable reference. Preserve the reference as its dotted path
+		// (e.g. "aws_s3_bucket.modern.id") instead of discarding it. This lets
+		// policies link related resources — e.g. an
+		// aws_s3_bucket_server_side_encryption_configuration whose bucket points
+		// at a given aws_s3_bucket — which the opaque placeholder made impossible.
+		if ref := traversalString(traversal); ref != "" {
+			return ref, nil
+		}
 		return "[UNSUPPORTED_REFERENCE]", nil
 	}
-	
+
 	// Get the variable name
 	attr, ok := traversal[1].(hcl.TraverseAttr)
 	if !ok {
 		return "[INVALID_VARIABLE_REFERENCE]", nil
 	}
-	
+
 	varName := attr.Name
-	
+
 	// Look up the variable in our map
 	if value, ok := p.variables[varName]; ok {
 		// Convert the cty.Value to a Go value
 		return p.ctyValueToGo(value)
 	}
-	
+
 	// Variable not found, return a placeholder
 	return fmt.Sprintf("[var.%s]", varName), nil
+}
+
+// traversalString renders an HCL traversal as its dotted source path, e.g.
+// aws_s3_bucket.modern.id. Returns "" if any segment is not a plain
+// root/attribute (index/splat traversals aren't useful as a reference key).
+func traversalString(traversal hcl.Traversal) string {
+	var parts []string
+	for _, t := range traversal {
+		switch tt := t.(type) {
+		case hcl.TraverseRoot:
+			parts = append(parts, tt.Name)
+		case hcl.TraverseAttr:
+			parts = append(parts, tt.Name)
+		default:
+			return ""
+		}
+	}
+	return strings.Join(parts, ".")
 }
 
 // extractTemplateExpression extracts values from string interpolation expressions like "${var.name}"
@@ -1241,10 +1343,10 @@ func (p *Parser) extractTemplateExpression(expr *hclsyntax.TemplateExpr) (interf
 	if !diags.HasErrors() {
 		return p.ctyValueToGo(val)
 	}
-	
+
 	// Otherwise, try to build a string with placeholders for the parts we can't resolve
 	var result strings.Builder
-	
+
 	for _, part := range expr.Parts {
 		// Try to evaluate this part with variables
 		partVal, diags := part.Value(p.evalContext)
@@ -1256,18 +1358,18 @@ func (p *Parser) extractTemplateExpression(expr *hclsyntax.TemplateExpr) (interf
 				continue
 			}
 		}
-		
+
 		// If we can't evaluate with variables, check if it's a variable reference
 		if varRef, ok := part.(*hclsyntax.ScopeTraversalExpr); ok {
 			val, _ := p.extractVariableReference(varRef)
 			result.WriteString(fmt.Sprintf("%v", val))
 			continue
 		}
-		
+
 		// For other expressions, add a placeholder
 		result.WriteString("[INTERPOLATED_VALUE]")
 	}
-	
+
 	return result.String(), nil
 }
 
@@ -1278,18 +1380,18 @@ func (p *Parser) extractConditionalExpression(expr *hclsyntax.ConditionalExpr) (
 	if !diags.HasErrors() {
 		return p.ctyValueToGo(val)
 	}
-	
+
 	// Create a context-preserving result for security analysis
 	conditionalResult := make(map[string]interface{})
 	conditionalResult["_type"] = "conditional_expression"
-	
+
 	// Try to evaluate the condition
 	condVal, condDiags := expr.Condition.Value(p.evalContext)
 	if !condDiags.HasErrors() {
 		// If condition can be evaluated, store the result
 		conditionalResult["_condition_evaluated"] = true
 		conditionalResult["_condition_value"] = condVal.True()
-		
+
 		// If condition can be evaluated, try to return the appropriate branch
 		if condVal.True() {
 			// True branch
@@ -1309,40 +1411,40 @@ func (p *Parser) extractConditionalExpression(expr *hclsyntax.ConditionalExpr) (
 			}
 		}
 	}
-	
+
 	// Try to extract condition for analysis
 	conditionVal, _ := p.extractGenericExpression(expr.Condition)
 	conditionalResult["_condition"] = conditionVal
-	
+
 	// Check for environment-based conditions (common security pattern)
 	if isEnvCondition := p.isEnvironmentCondition(expr.Condition); isEnvCondition {
 		conditionalResult["_environment_condition"] = true
 	}
-	
+
 	// Check for variable negation (common pattern: !var.secure_mode)
 	if isVarNegation, varName := p.isVariableNegation(expr.Condition); isVarNegation {
 		conditionalResult["_variable_negation"] = true
 		conditionalResult["_negated_variable"] = varName
 	}
-	
+
 	// Extract both branches
 	var trueValue, falseValue interface{}
-	
+
 	// Extract the true value
 	trueValue, _ = p.extractGenericExpression(expr.TrueResult)
 	conditionalResult["_true_value"] = trueValue
-	
+
 	// Extract the false value
 	falseValue, _ = p.extractGenericExpression(expr.FalseResult)
 	conditionalResult["_false_value"] = falseValue
-	
+
 	// For security analysis, use the least secure option by default
 	conditionalResult["_security_analysis"] = "worst_case"
 	conditionalResult["_security_value"] = p.leastSecureOption(trueValue, falseValue)
-	
+
 	// For backward compatibility, also return a string representation
 	conditionalResult["_string_value"] = fmt.Sprintf("[CONDITIONAL: %v OR %v]", trueValue, falseValue)
-	
+
 	return conditionalResult, nil
 }
 
@@ -1367,19 +1469,19 @@ func (p *Parser) isEnvironmentVar(expr *hclsyntax.ScopeTraversalExpr) bool {
 	if len(expr.Traversal) < 2 {
 		return false
 	}
-	
+
 	// Check if it's a var reference
 	root, ok := expr.Traversal[0].(hcl.TraverseRoot)
 	if !ok || root.Name != "var" {
 		return false
 	}
-	
+
 	// Check the variable name
 	attr, ok := expr.Traversal[1].(hcl.TraverseAttr)
 	if !ok {
 		return false
 	}
-	
+
 	// Common environment variable names
 	envVarNames := []string{"environment", "env", "stage", "production", "prod_mode", "production_mode"}
 	for _, name := range envVarNames {
@@ -1387,7 +1489,7 @@ func (p *Parser) isEnvironmentVar(expr *hclsyntax.ScopeTraversalExpr) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -1396,18 +1498,18 @@ func (p *Parser) leastSecureOption(val1, val2 interface{}) interface{} {
 	// For string values, check known insecure values
 	str1, isStr1 := val1.(string)
 	str2, isStr2 := val2.(string)
-	
+
 	if isStr1 && isStr2 {
 		// Known less secure values (precedence order)
 		lessSecureValues := []string{
 			"public-read-write",
-			"public-read", 
-			"authenticated-read", 
+			"public-read",
+			"authenticated-read",
 			"private",
 			"false",
 			"0",
 		}
-		
+
 		// Check which value is less secure
 		for _, insecure := range lessSecureValues {
 			if str1 == insecure {
@@ -1418,11 +1520,11 @@ func (p *Parser) leastSecureOption(val1, val2 interface{}) interface{} {
 			}
 		}
 	}
-	
+
 	// For boolean values, false is typically less secure
 	bool1, isBool1 := val1.(bool)
 	bool2, isBool2 := val2.(bool)
-	
+
 	if isBool1 && isBool2 {
 		if !bool1 && bool2 {
 			return val1
@@ -1431,11 +1533,11 @@ func (p *Parser) leastSecureOption(val1, val2 interface{}) interface{} {
 			return val2
 		}
 	}
-	
+
 	// For numbers, lower is typically less secure (retention periods, etc)
 	num1, isNum1 := val1.(float64)
 	num2, isNum2 := val2.(float64)
-	
+
 	if isNum1 && isNum2 {
 		if num1 < num2 {
 			return val1
@@ -1444,11 +1546,11 @@ func (p *Parser) leastSecureOption(val1, val2 interface{}) interface{} {
 			return val2
 		}
 	}
-	
+
 	// Check for conditional values embedded in maps
 	condMap1, isCond1 := val1.(map[string]interface{})
 	condMap2, isCond2 := val2.(map[string]interface{})
-	
+
 	if isCond1 {
 		if typeVal, ok := condMap1["_type"].(string); ok && typeVal == "conditional_expression" {
 			if secVal, ok := condMap1["_security_value"]; ok {
@@ -1456,7 +1558,7 @@ func (p *Parser) leastSecureOption(val1, val2 interface{}) interface{} {
 			}
 		}
 	}
-	
+
 	if isCond2 {
 		if typeVal, ok := condMap2["_type"].(string); ok && typeVal == "conditional_expression" {
 			if secVal, ok := condMap2["_security_value"]; ok {
@@ -1464,7 +1566,7 @@ func (p *Parser) leastSecureOption(val1, val2 interface{}) interface{} {
 			}
 		}
 	}
-	
+
 	// If we can't determine, return both for analysis
 	return []interface{}{val1, val2}
 }
@@ -1476,18 +1578,18 @@ func (p *Parser) extractBinaryOperation(expr *hclsyntax.BinaryOpExpr) (interface
 	if !diags.HasErrors() {
 		return p.ctyValueToGo(val)
 	}
-	
+
 	// Extract left and right operands
 	leftVal, leftErr := p.extractGenericExpression(expr.LHS)
 	if leftErr != nil {
 		leftVal = "[LEFT_OPERAND]"
 	}
-	
+
 	rightVal, rightErr := p.extractGenericExpression(expr.RHS)
 	if rightErr != nil {
 		rightVal = "[RIGHT_OPERAND]"
 	}
-	
+
 	// Get the operation symbol
 	var opStr string
 	switch expr.Op {
@@ -1518,7 +1620,7 @@ func (p *Parser) extractBinaryOperation(expr *hclsyntax.BinaryOpExpr) (interface
 	default:
 		opStr = "??"
 	}
-	
+
 	// Return a placeholder with the operation
 	return fmt.Sprintf("[OPERATION: %v %s %v]", leftVal, opStr, rightVal), nil
 }
@@ -1530,7 +1632,7 @@ func (p *Parser) extractGenericExpression(expr hclsyntax.Expression) (interface{
 	if !diags.HasErrors() {
 		return p.ctyValueToGo(val)
 	}
-	
+
 	// If that fails, check the expression type
 	switch e := expr.(type) {
 	case *hclsyntax.ScopeTraversalExpr:
@@ -1559,7 +1661,7 @@ func (p *Parser) extractModuleInfo(block *hclsyntax.Block, filePath string) (*ty
 
 	moduleName := block.Labels[0]
 	attributes := make(map[string]interface{})
-	
+
 	// Extract all attributes, especially 'source' which is required
 	for name, attr := range block.Body.Attributes {
 		val, err := p.extractAttributeValue(attr)
@@ -1578,7 +1680,7 @@ func (p *Parser) extractModuleInfo(block *hclsyntax.Block, filePath string) (*ty
 		}
 		blocksByType[nestedBlock.Type] = append(blocksByType[nestedBlock.Type], nestedAttrs)
 	}
-	
+
 	// Add blocks to attributes
 	for blockType, blocks := range blocksByType {
 		if len(blocks) == 1 {
@@ -1612,7 +1714,7 @@ func (p *Parser) extractModuleInfoFromJSON(block *hcl.Block, filePath string) (*
 	}
 
 	moduleName := block.Labels[0]
-	
+
 	// Extract attributes from the block body
 	attrs, diags := block.Body.JustAttributes()
 	if diags.HasErrors() {
@@ -1708,12 +1810,12 @@ func (p *Parser) isSecurityCriticalVariable(name string, value interface{}) bool
 
 	// High-priority security boolean variables that must be specially tracked
 	securityBooleanVars := map[string]bool{
-		"publicly_accessible": true, 
-		"storage_encrypted": true,
-		"multi_az": true,
-		"deletion_protection": true,
+		"publicly_accessible":                 true,
+		"storage_encrypted":                   true,
+		"multi_az":                            true,
+		"deletion_protection":                 true,
 		"iam_database_authentication_enabled": true,
-		"performance_insights_enabled": true,
+		"performance_insights_enabled":        true,
 	}
 
 	// Direct match for critical security boolean variables
@@ -1800,14 +1902,14 @@ func (p *Parser) enhanceCriticalRdsSecurityAttributes(attrs map[string]interface
 		insecureVal bool
 		securityKey string
 	}
-	
+
 	criticalBooleanAttrs := []criticalAttrInfo{
 		{"publicly_accessible", true, "_security_publicly_accessible"},
 		{"storage_encrypted", false, "_security_unencrypted"},
 		{"iam_database_authentication_enabled", false, "_security_no_iam_auth"},
 		{"deletion_protection", false, "_security_no_deletion_protection"},
 	}
-	
+
 	// Check each critical boolean attribute
 	for _, critAttr := range criticalBooleanAttrs {
 		if attrVal, exists := attrs[critAttr.attrName]; exists {
@@ -1816,11 +1918,11 @@ func (p *Parser) enhanceCriticalRdsSecurityAttributes(attrs map[string]interface
 				// This is a potential security issue
 				attrs[critAttr.securityKey] = true
 			}
-			
+
 			// Enhanced attribute with security context
 			if enhAttr, isEnh := attrVal.(map[string]interface{}); isEnh {
-				if typeVal, hasType := enhAttr["_type"]; hasType && 
-				   (typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
+				if typeVal, hasType := enhAttr["_type"]; hasType &&
+					(typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
 					// Check security value
 					if secVal, hasSec := enhAttr["_security_value"]; hasSec {
 						if boolVal, isBool := secVal.(bool); isBool && boolVal == critAttr.insecureVal {
@@ -1832,7 +1934,7 @@ func (p *Parser) enhanceCriticalRdsSecurityAttributes(attrs map[string]interface
 			}
 		}
 	}
-	
+
 	// Special handling for backup_retention_period
 	if retPeriod, exists := attrs["backup_retention_period"]; exists {
 		// Check direct value
@@ -1840,11 +1942,11 @@ func (p *Parser) enhanceCriticalRdsSecurityAttributes(attrs map[string]interface
 			// Backups disabled - security issue
 			attrs["_security_no_backup"] = true
 		}
-		
+
 		// Check enhanced value
 		if enhAttr, isEnh := retPeriod.(map[string]interface{}); isEnh {
-			if typeVal, hasType := enhAttr["_type"]; hasType && 
-			   (typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
+			if typeVal, hasType := enhAttr["_type"]; hasType &&
+				(typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
 				// Check security value
 				if secVal, hasSec := enhAttr["_security_value"]; hasSec {
 					if numVal, isNum := secVal.(float64); isNum && numVal == 0 {
@@ -1855,18 +1957,18 @@ func (p *Parser) enhanceCriticalRdsSecurityAttributes(attrs map[string]interface
 			}
 		}
 	}
-	
+
 	// Special handling for enabled_cloudwatch_logs_exports
 	if logExports, exists := attrs["enabled_cloudwatch_logs_exports"]; exists {
 		// Check if it's empty
 		if arr, isArr := logExports.([]interface{}); isArr && len(arr) == 0 {
 			attrs["_security_no_log_exports"] = true
 		}
-		
+
 		// Check enhanced value
 		if enhAttr, isEnh := logExports.(map[string]interface{}); isEnh {
-			if typeVal, hasType := enhAttr["_type"]; hasType && 
-			   (typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
+			if typeVal, hasType := enhAttr["_type"]; hasType &&
+				(typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
 				// Check security value
 				if secVal, hasSec := enhAttr["_security_value"]; hasSec {
 					if arr, isArr := secVal.([]interface{}); isArr && len(arr) == 0 {
@@ -1877,18 +1979,18 @@ func (p *Parser) enhanceCriticalRdsSecurityAttributes(attrs map[string]interface
 			}
 		}
 	}
-	
+
 	// Special handling for parameter_group_name
 	if pgName, exists := attrs["parameter_group_name"]; exists {
 		// Check if it contains "default"
 		if strVal, isStr := pgName.(string); isStr && strings.Contains(strVal, "default") {
 			attrs["_security_default_parameter_group"] = true
 		}
-		
+
 		// Check enhanced value
 		if enhAttr, isEnh := pgName.(map[string]interface{}); isEnh {
-			if typeVal, hasType := enhAttr["_type"]; hasType && 
-			   (typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
+			if typeVal, hasType := enhAttr["_type"]; hasType &&
+				(typeVal == "security_enhanced_attribute" || typeVal == "conditional_expression") {
 				// Check security value
 				if secVal, hasSec := enhAttr["_security_value"]; hasSec {
 					if strVal, isStr := secVal.(string); isStr && strings.Contains(strVal, "default") {
@@ -1904,35 +2006,35 @@ func (p *Parser) enhanceCriticalRdsSecurityAttributes(attrs map[string]interface
 // enhanceSecurityAttributesFromModuleVars enhances resource attributes with module variables
 func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource, moduleVars map[string]interface{}) {
 	// Skip non-RDS resources
-	if !strings.HasPrefix(resource.Type, "aws_db_instance") && 
-	   !strings.HasPrefix(resource.Type, "aws_rds_cluster") {
+	if !strings.HasPrefix(resource.Type, "aws_db_instance") &&
+		!strings.HasPrefix(resource.Type, "aws_rds_cluster") {
 		return
 	}
-	
+
 	// Get the attributes map
 	attrs := resource.Attributes
 	if attrs == nil {
 		return
 	}
-	
+
 	// Add module-specific security metadata
 	attrs["_resource_in_module"] = true
-	
+
 	// Special handling for critical RDS security attributes
 	p.enhanceCriticalRdsSecurityAttributes(attrs)
-	
+
 	// RDS security-critical attributes to enhance with module variable context
 	securityAttrs := []string{
-		"publicly_accessible", 
-		"storage_encrypted", 
+		"publicly_accessible",
+		"storage_encrypted",
 		"backup_retention_period",
-		"multi_az", 
+		"multi_az",
 		"deletion_protection",
 		"iam_database_authentication_enabled",
 		"enabled_cloudwatch_logs_exports",
 		"parameter_group_name",
 	}
-	
+
 	// Add security context to these attributes
 	for _, attrName := range securityAttrs {
 		if attrVal, exists := attrs[attrName]; exists {
@@ -1940,7 +2042,7 @@ func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource
 			if varRef, isRef := attrVal.(string); isRef && strings.HasPrefix(varRef, "[var.") {
 				// Extract variable name
 				varName := strings.TrimPrefix(strings.TrimSuffix(varRef, "]"), "[var.")
-				
+
 				// Look for the variable in module variables
 				if moduleVal, ok := moduleVars[varName]; ok {
 					// Create an enhanced attribute with security context
@@ -1949,20 +2051,20 @@ func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource
 					enhancedAttr["_original_value"] = attrVal
 					enhancedAttr["_variable_name"] = varName
 					enhancedAttr["_module_value"] = moduleVal
-					
+
 					// For security analysis, determine the worst-case value
-					if condMap, isCond := moduleVal.(map[string]interface{}); isCond && 
-					   condMap["_type"] == "conditional_expression" {
+					if condMap, isCond := moduleVal.(map[string]interface{}); isCond &&
+						condMap["_type"] == "conditional_expression" {
 						if secVal, hasSec := condMap["_security_value"]; hasSec {
 							enhancedAttr["_security_value"] = secVal
 						}
 					} else {
 						enhancedAttr["_security_value"] = moduleVal
 					}
-					
+
 					// Replace the attribute with the enhanced version
 					attrs[attrName] = enhancedAttr
-					
+
 					// Special handling for specific RDS security attributes
 					switch attrName {
 					case "publicly_accessible":
@@ -1989,14 +2091,14 @@ func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource
 					}
 				}
 			}
-			
+
 			// If the attribute is a conditional expression itself, ensure it has security context
-			if condMap, isCond := attrVal.(map[string]interface{}); isCond && 
-			   condMap["_type"] == "conditional_expression" {
+			if condMap, isCond := attrVal.(map[string]interface{}); isCond &&
+				condMap["_type"] == "conditional_expression" {
 				// Make sure it's marked as a security attribute
 				condMap["_security_critical"] = true
 				condMap["_attribute_name"] = attrName
-				
+
 				// Add specialized handling based on attribute name
 				switch attrName {
 				case "publicly_accessible":
@@ -2035,7 +2137,7 @@ func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource
 			}
 		}
 	}
-	
+
 	// Handle boolean values directly - especially for module variables like in variable_db
 	for varName, varValue := range moduleVars {
 		// Handle direct boolean values that might be security critical
@@ -2063,13 +2165,13 @@ func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource
 				}
 			}
 		}
-		
+
 		// Handle numeric values like backup_retention_period
 		if numVal, isNum := varValue.(float64); isNum && varName == "backup_retention_period" && numVal == 0 {
 			attrs["_security_no_backup"] = true
 			p.log.Debug("Direct module var security marker: _security_no_backup = true for %s", resource.ID)
 		}
-		
+
 		// Handle conditional expressions in module variables
 		if condMap, isCond := varValue.(map[string]interface{}); isCond && condMap["_type"] == "conditional_expression" {
 			if secVal, hasSec := condMap["_security_value"]; hasSec {
@@ -2093,16 +2195,16 @@ func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource
 			}
 		}
 	}
-	
+
 	// Handle special case for tags
 	if tags, hasTags := attrs["tags"].(map[string]interface{}); hasTags {
 		// Check for environment tag
 		if envTag, hasEnv := tags["Environment"]; hasEnv {
 			// If it's a production environment, add metadata for policy checks
-			if envStr, isStr := envTag.(string); isStr && 
-			   (envStr == "production" || envStr == "prod") {
+			if envStr, isStr := envTag.(string); isStr &&
+				(envStr == "production" || envStr == "prod") {
 				attrs["_is_production"] = true
-				
+
 				// For production environments, multi-AZ and deletion protection should be enabled
 				if multiAz, hasMultiAz := attrs["multi_az"]; hasMultiAz {
 					if boolVal, isBool := multiAz.(bool); isBool && !boolVal {
@@ -2110,7 +2212,7 @@ func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource
 						attrs["_security_no_multi_az_prod"] = true
 					}
 				}
-				
+
 				if delProtection, hasDelProtection := attrs["deletion_protection"]; hasDelProtection {
 					if boolVal, isBool := delProtection.(bool); isBool && !boolVal {
 						// This is a potential security issue for production environments
@@ -2120,7 +2222,7 @@ func (p *Parser) enhanceSecurityAttributesFromModuleVars(resource types.Resource
 			}
 		}
 	}
-	
+
 	// No need to update resource.Attributes since we're modifying the map directly
 	// The map is passed by reference, so changes are reflected in the original
 }

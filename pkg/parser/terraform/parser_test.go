@@ -381,3 +381,71 @@ func TestParser_SupportedExtensions(t *testing.T) {
 		}
 	}
 }
+
+func TestParser_ReferenceStringParity_HCLVsTFJSON(t *testing.T) {
+	parser := New()
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	hclPath := filepath.Join(tmpDir, "main.tf")
+	hclContent := `
+resource "aws_s3_bucket" "modern" {
+  bucket = "my-modern-bucket"
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "modern" {
+  bucket = aws_s3_bucket.modern.id
+}
+`
+	if err := os.WriteFile(hclPath, []byte(hclContent), 0644); err != nil {
+		t.Fatalf("write hcl file: %v", err)
+	}
+
+	jsonPath := filepath.Join(tmpDir, "main.tf.json")
+	jsonContent := `{
+  "resource": {
+    "aws_s3_bucket": {
+      "modern": {
+        "bucket": "my-modern-bucket"
+      }
+    },
+    "aws_s3_bucket_server_side_encryption_configuration": {
+      "modern": {
+        "bucket": "${aws_s3_bucket.modern.id}"
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(jsonPath, []byte(jsonContent), 0644); err != nil {
+		t.Fatalf("write json file: %v", err)
+	}
+
+	hclResources, err := parser.Parse(ctx, hclPath)
+	if err != nil {
+		t.Fatalf("parse hcl: %v", err)
+	}
+	jsonResources, err := parser.Parse(ctx, jsonPath)
+	if err != nil {
+		t.Fatalf("parse tf.json: %v", err)
+	}
+
+	var hclRef interface{}
+	for _, r := range hclResources {
+		if r.Type == "aws_s3_bucket_server_side_encryption_configuration" && r.Name == "modern" {
+			hclRef = r.Attributes["bucket"]
+		}
+	}
+	if hclRef != "aws_s3_bucket.modern.id" {
+		t.Fatalf("unexpected HCL bucket reference: %#v", hclRef)
+	}
+
+	var jsonRef interface{}
+	for _, r := range jsonResources {
+		if r.Type == "aws_s3_bucket_server_side_encryption_configuration" && r.Name == "modern" {
+			jsonRef = r.Attributes["bucket"]
+		}
+	}
+	if jsonRef != hclRef {
+		t.Fatalf("tf.json bucket reference mismatch: got %#v, want %#v", jsonRef, hclRef)
+	}
+}

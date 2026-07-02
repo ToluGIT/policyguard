@@ -6,6 +6,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/ToluGIT/policyguard/pkg/config"
 	"github.com/ToluGIT/policyguard/pkg/types"
 )
 
@@ -72,6 +73,93 @@ func (m *mockReporter) Format() string {
 	return "mock"
 }
 
+func TestSortViolations_Deterministic(t *testing.T) {
+	// Two different input orderings of the same findings must sort to the same
+	// canonical order, so reports are stable across filesystem-dependent
+	// discovery order.
+	mk := func() []types.PolicyViolation {
+		return []types.PolicyViolation{
+			{ID: "b", PolicyID: "p2", ResourceID: "aws_s3_bucket.z", Location: types.Location{File: "b.tf", Line: 5}},
+			{ID: "a", PolicyID: "p1", ResourceID: "aws_s3_bucket.a", Location: types.Location{File: "a.tf", Line: 3}},
+			{ID: "c", PolicyID: "p1", ResourceID: "aws_s3_bucket.a", Location: types.Location{File: "a.tf", Line: 3}},
+		}
+	}
+	v1 := mk()
+	v2 := []types.PolicyViolation{mk()[2], mk()[0], mk()[1]} // shuffled
+
+	sortViolations(v1)
+	sortViolations(v2)
+
+	if len(v1) != len(v2) {
+		t.Fatalf("length mismatch")
+	}
+	for i := range v1 {
+		if v1[i].ID != v2[i].ID {
+			t.Errorf("position %d differs after sort: %q vs %q (not deterministic)", i, v1[i].ID, v2[i].ID)
+		}
+	}
+	// First should be the a.tf finding (file ordering wins).
+	if v1[0].Location.File != "a.tf" {
+		t.Errorf("sort key wrong: first file = %q, want a.tf", v1[0].Location.File)
+	}
+}
+
+func TestAnalyzer_Suppressions(t *testing.T) {
+	ctx := context.Background()
+	resources := []types.Resource{{ID: "aws_s3_bucket.b", Type: "aws_s3_bucket", Name: "b"}}
+	violations := []types.PolicyViolation{
+		{ID: "v1", PolicyID: "s3_bucket_logging", ResourceID: "aws_s3_bucket.b", Severity: "medium"},
+		{ID: "v2", PolicyID: "s3_bucket_encryption", ResourceID: "aws_s3_bucket.b", Severity: "high"},
+	}
+
+	parser := &mockParser{resources: resources}
+	engine := &mockEngine{result: &types.PolicyResult{Violations: violations}}
+	reporter := &mockReporter{report: &types.Report{}}
+
+	a := New(parser, engine, nil, reporter).WithSuppressions(&config.SuppressionConfig{
+		Rules: []config.SuppressionRule{
+			{PolicyID: "s3_bucket_logging", Reason: "handled centrally"},
+		},
+	})
+
+	// The reporter records what it was handed; capture via a custom reporter.
+	captured := &capturingReporter{}
+	a.reporter = captured
+
+	if _, err := a.AnalyzeFile(ctx, "main.tf"); err != nil {
+		t.Fatalf("AnalyzeFile: %v", err)
+	}
+
+	if len(captured.result.Violations) != 1 {
+		t.Fatalf("expected 1 violation after suppression, got %d", len(captured.result.Violations))
+	}
+	if captured.result.Violations[0].PolicyID != "s3_bucket_encryption" {
+		t.Errorf("wrong violation kept: %s", captured.result.Violations[0].PolicyID)
+	}
+	if c, _ := captured.result.Metadata["suppressed_count"].(int); c != 1 {
+		t.Errorf("suppressed_count = %v, want 1", captured.result.Metadata["suppressed_count"])
+	}
+	byPolicy, _ := captured.result.Metadata["suppressed_by_policy"].(map[string]int)
+	if byPolicy["s3_bucket_logging"] != 1 {
+		t.Errorf("suppressed_by_policy = %v, want s3_bucket_logging:1", byPolicy)
+	}
+}
+
+// capturingReporter records the PolicyResult passed to Generate so tests can
+// assert on post-suppression violations and metadata.
+type capturingReporter struct {
+	result *types.PolicyResult
+}
+
+func (c *capturingReporter) Generate(ctx context.Context, result *types.PolicyResult, resources []types.Resource) (*types.Report, error) {
+	c.result = result
+	return &types.Report{Violations: result.Violations, Metadata: result.Metadata}, nil
+}
+func (c *capturingReporter) Write(ctx context.Context, report *types.Report, w io.Writer) error {
+	return nil
+}
+func (c *capturingReporter) Format() string { return "capture" }
+
 func TestAnalyzer_New(t *testing.T) {
 	parser := &mockParser{}
 	engine := &mockEngine{}
@@ -135,9 +223,9 @@ func TestAnalyzer_AnalyzeFile(t *testing.T) {
 			reporter: &mockReporter{
 				report: &types.Report{
 					Summary: types.Summary{
-						TotalResources: 1,
+						TotalResources:  1,
 						TotalViolations: 1,
-						PassRate:       0.0,
+						PassRate:        0.0,
 					},
 					Violations: []types.PolicyViolation{
 						{
@@ -151,9 +239,9 @@ func TestAnalyzer_AnalyzeFile(t *testing.T) {
 			},
 			expectedReport: &types.Report{
 				Summary: types.Summary{
-					TotalResources: 1,
+					TotalResources:  1,
 					TotalViolations: 1,
-					PassRate:       0.0,
+					PassRate:        0.0,
 				},
 				Violations: []types.PolicyViolation{
 					{
@@ -231,11 +319,11 @@ func TestAnalyzer_AnalyzeFile(t *testing.T) {
 					return
 				}
 				if report.Summary.TotalResources != tt.expectedReport.Summary.TotalResources {
-					t.Errorf("AnalyzeFile() TotalResources = %v, want %v", 
+					t.Errorf("AnalyzeFile() TotalResources = %v, want %v",
 						report.Summary.TotalResources, tt.expectedReport.Summary.TotalResources)
 				}
 				if len(report.Violations) != len(tt.expectedReport.Violations) {
-					t.Errorf("AnalyzeFile() violations count = %v, want %v", 
+					t.Errorf("AnalyzeFile() violations count = %v, want %v",
 						len(report.Violations), len(tt.expectedReport.Violations))
 				}
 			}
@@ -396,11 +484,11 @@ func TestAnalyzer_AnalyzeDirectory(t *testing.T) {
 					return
 				}
 				if report.Summary.TotalResources != tt.expectedReport.Summary.TotalResources {
-					t.Errorf("AnalyzeDirectory() TotalResources = %v, want %v", 
+					t.Errorf("AnalyzeDirectory() TotalResources = %v, want %v",
 						report.Summary.TotalResources, tt.expectedReport.Summary.TotalResources)
 				}
 				if len(report.Violations) != len(tt.expectedReport.Violations) {
-					t.Errorf("AnalyzeDirectory() violations count = %v, want %v", 
+					t.Errorf("AnalyzeDirectory() violations count = %v, want %v",
 						len(report.Violations), len(tt.expectedReport.Violations))
 				}
 			}

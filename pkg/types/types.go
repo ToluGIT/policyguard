@@ -23,15 +23,20 @@ type Location struct {
 
 // PolicyViolation represents a security policy violation
 type PolicyViolation struct {
-	ID          string    `json:"id"`
-	ResourceID  string    `json:"resource_id"`
-	PolicyID    string    `json:"policy_id"`
-	Severity    string    `json:"severity"`
-	Message     string    `json:"message"`
-	Details     string    `json:"details"`
-	Remediation string    `json:"remediation"`
-	Location    Location  `json:"location"`
-	Timestamp   time.Time `json:"timestamp"`
+	ID          string `json:"id"`
+	ResourceID  string `json:"resource_id"`
+	PolicyID    string `json:"policy_id"`
+	Severity    string `json:"severity"`
+	Message     string `json:"message"`
+	Details     string `json:"details"`
+	Remediation string `json:"remediation"`
+	// RemediationSnippet is an optional corrected-HCL example for this finding,
+	// populated by the remediation suggester when a template exists. Empty when
+	// no snippet is available. Omitted from JSON when empty to keep machine
+	// output stable for findings without a snippet.
+	RemediationSnippet string    `json:"remediation_snippet,omitempty"`
+	Location           Location  `json:"location"`
+	Timestamp          time.Time `json:"timestamp"`
 }
 
 // PolicyResult represents the result of policy evaluation
@@ -53,10 +58,10 @@ type Report struct {
 
 // Summary represents report summary statistics
 type Summary struct {
-	TotalResources   int            `json:"total_resources"`
-	TotalViolations  int            `json:"total_violations"`
+	TotalResources       int            `json:"total_resources"`
+	TotalViolations      int            `json:"total_violations"`
 	ViolationsBySeverity map[string]int `json:"violations_by_severity"`
-	PassRate         float64        `json:"pass_rate"`
+	PassRate             float64        `json:"pass_rate"`
 }
 
 // Severity levels
