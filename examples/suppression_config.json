@@ -1,0 +1,15 @@
+{
+  "description": "Example suppression configuration. Every rule must carry a reason; rules may optionally expire so suppressions resurface for review.",
+  "rules": [
+    {
+      "policy_id": "s3_bucket_public_access",
+      "resource": "aws_s3_bucket.public_static_site",
+      "reason": "Intentional public bucket serving a static website; access reviewed 2026-06",
+      "expires": "2026-12-31"
+    },
+    {
+      "policy_id": "s3_bucket_logging",
+      "reason": "Access logging is handled centrally via an org-wide CloudTrail data event trail (policy-wide: no resource scope, so this applies to all buckets, current and future)"
+    }
+  ]
+}

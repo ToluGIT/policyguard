@@ -1,0 +1,182 @@
+{{ define "dashboard-body" }}
+  <!-- Scan-meta strip -->
+  <div class="meta">
+    <div class="meta-left">
+      <span class="meta-item">{{ .TotalResources }} resources</span>
+      <span class="dot">·</span>
+      <span class="meta-item">{{ .TotalChecks }} checks</span>
+      <span class="dot">·</span>
+      <span class="meta-item">{{ .TotalViolations }} findings</span>
+      {{ if gt .SuppressedCount 0 }}<span class="dot">·</span><span class="meta-item">{{ .SuppressedCount }} suppressed</span>{{ end }}
+      <span class="dot">·</span>
+      <span class="meta-item meta-dim">{{ .GeneratedAt }}</span>
+      <span class="dot">·</span>
+      <span class="meta-item meta-dim">PolicyGuard v{{ .Version }}</span>
+    </div>
+    <div class="meta-right">
+      <span class="passrate"><span id="passrate-num" data-value="{{ .PassRateValue }}">{{ .PassRate }}</span>% pass rate</span>
+    </div>
+  </div>
+
+  <!-- Severity stat cards -->
+  <section class="stats">
+    {{ range .Stats }}
+    <div class="stat card" data-sev="{{ .Key }}">
+      <div class="stat-head">
+        <span class="stat-dot sev-dot-{{ .Key }}"></span>
+        <span class="stat-label sev-text-{{ .Key }}">{{ .Label }}</span>
+      </div>
+      <div class="stat-num" data-count="{{ .Count }}">0</div>
+      <div class="stat-desc">{{ .Descriptor }}</div>
+    </div>
+    {{ end }}
+  </section>
+
+  <!-- Stacked severity distribution bar -->
+  {{ if .Distribution }}
+  <div class="distbar" role="img" aria-label="Severity distribution">
+    {{ range .Distribution }}
+    <span class="distseg {{ if .IsPass }}distseg-pass{{ else }}distseg-fail sev-fill-{{ .Key }}{{ end }}"
+          style="width: {{ pct .Percent }}" title="{{ .Key }}: {{ .Count }}"></span>
+    {{ end }}
+  </div>
+  {{ end }}
+
+  <!-- Main grid -->
+  <div class="grid">
+
+    <!-- Findings table -->
+    <section class="card results">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="eyebrow">FINDINGS · {{ .TotalViolations }}</span>
+          <h2>Scan Results</h2>
+        </div>
+        <div class="filters" role="tablist">
+          <button class="seg active" data-filter="all">All</button>
+          <button class="seg" data-filter="critical">Critical</button>
+          <button class="seg" data-filter="high">High</button>
+          <button class="seg" data-filter="medium">Medium</button>
+          <button class="seg" data-filter="low">Low</button>
+        </div>
+      </div>
+
+      {{ if .Findings }}
+      <div class="table-wrap">
+        <table class="findings">
+          <thead>
+            <tr>
+              <th class="col-res">RESOURCE</th>
+              <th class="col-pol">POLICY</th>
+              <th class="col-sev">SEVERITY</th>
+              <th class="col-loc">FILE:LINE</th>
+              <th class="col-status">STATUS</th>
+            </tr>
+          </thead>
+          <tbody id="rows">
+            {{ range .Findings }}
+            <tr class="row" data-index="{{ .Index }}" data-sev="{{ .Severity }}" tabindex="0">
+              <td class="col-res">
+                <span class="res-id">{{ .ResourceID }}</span>
+                <span class="res-type">{{ .ResourceType }}</span>
+              </td>
+              <td class="col-pol" data-label="Policy">
+                <span class="pol-title">{{ .Title }}</span>
+                <span class="pol-id">{{ .PolicyID }}</span>
+              </td>
+              <td class="col-sev" data-label="Severity">
+                <span class="pill pill-fail sev-fill-{{ .Severity }}">{{ .SeverityUp }}</span>
+              </td>
+              <td class="col-loc" data-label="File:Line"><span class="loc">{{ fileLine .File .Line }}</span></td>
+              <td class="col-status" data-label="Status"><span class="status status-fail">FAIL</span></td>
+            </tr>
+            {{ end }}
+          </tbody>
+        </table>
+        <div id="empty" class="empty" hidden>No findings match this filter.</div>
+      </div>
+      {{ else }}
+      <div class="clean">
+        <svg class="ico-lg" viewBox="0 0 100 104" width="40" height="42" fill="none" aria-hidden="true" style="color: var(--pass)">
+          <path d="M50 6 L88 20 V54 C88 80 50 98 50 98 C50 98 12 80 12 54 V20 Z" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+          <path d="M37 46 L47 56 L65 38" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p>No violations found. All {{ .TotalChecks }} checks passed.</p>
+      </div>
+      {{ end }}
+    </section>
+
+    <!-- Detail panel -->
+    <aside class="card detail" id="detail">
+      {{ if .Findings }}
+      {{ range .Findings }}
+      <div class="detail-body" data-detail="{{ .Index }}" {{ if ne .Index 0 }}hidden{{ end }}>
+        <div class="detail-head">
+          <span class="pill pill-fail sev-fill-{{ .Severity }}">{{ .SeverityUp }}</span>
+          <span class="detail-policy">{{ .PolicyID }}</span>
+          <span class="status status-fail">FAIL</span>
+        </div>
+        <h3 class="detail-title">{{ .Title }}</h3>
+
+        <div class="meta-grid">
+          <div><span class="k">RESOURCE</span><span class="v">{{ .ResourceID }}</span></div>
+          <div><span class="k">LINE</span><span class="v">{{ fileLine .File .Line }}</span></div>
+          {{ if .Provider }}<div><span class="k">PROVIDER</span><span class="v">{{ .Provider }}</span></div>{{ end }}
+          <div><span class="k">TYPE</span><span class="v">{{ .ResourceType }}</span></div>
+        </div>
+
+        {{ if .Details }}
+        <div class="section">
+          <span class="eyebrow">VIOLATION</span>
+          <p class="prose">{{ .Details }}</p>
+        </div>
+        {{ end }}
+
+        {{ if or .CWE (hasItems .CIS) (hasItems .NIST) }}
+        <div class="tags">
+          {{ range .CWE }}<span class="tag" title="{{ .Title }}">{{ .ID }}</span>{{ end }}
+          {{ if hasItems .CIS }}<span class="tag">CIS {{ join .CIS ", " }}</span>{{ end }}
+          {{ if hasItems .NIST }}<span class="tag">NIST {{ join .NIST ", " }}</span>{{ end }}
+        </div>
+        {{ end }}
+
+        {{ if .Evidence }}
+        <div class="section">
+          <span class="eyebrow">EVIDENCE</span>
+          <div class="code">
+            <div class="code-file">{{ .File }}</div>
+            {{ $sev := .Severity }}
+            {{ range .Evidence }}
+            <div class="code-line{{ if .Offending }} offending{{ end }}"{{ if .Offending }} data-sev="{{ $sev }}"{{ end }}>
+              <span class="ln">{{ .Number }}</span><span class="lc">{{ .Text }}</span>
+            </div>
+            {{ end }}
+          </div>
+        </div>
+        {{ end }}
+
+        {{ if .Diff }}
+        <div class="section">
+          <span class="eyebrow">SUGGESTED REMEDIATION</span>
+          <div class="code diff">
+            {{ range .Diff }}<div class="diff-line diff-{{ .Kind }}"><span class="dg">{{ if eq .Kind "add" }}+{{ else if eq .Kind "del" }}-{{ else }} {{ end }}</span><span class="dc">{{ .Text }}</span></div>{{ end }}
+          </div>
+        </div>
+        {{ end }}
+
+        {{ if .Remediation }}
+        <p class="prose remediation-prose">{{ .Remediation }}</p>
+        {{ end }}
+      </div>
+      {{ end }}
+      {{ else }}
+      <div class="detail-empty">
+        <span class="eyebrow">DETAIL</span>
+        <p>Select a finding to see its evidence and remediation.</p>
+      </div>
+      {{ end }}
+    </aside>
+  </div>
+
+  <script type="application/json" id="findings-data">{{ .FindingsJSON }}</script>
+{{ end }}

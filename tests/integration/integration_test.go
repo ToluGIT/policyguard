@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package integration
@@ -6,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,12 +32,12 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "Failed to build binary: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	code := m.Run()
-	
+
 	// Clean up
 	os.Remove(getBinaryPath())
-	
+
 	os.Exit(code)
 }
 
@@ -43,15 +45,15 @@ func buildBinary() error {
 	_, currentFile, _, _ := runtime.Caller(0)
 	projectRoot := filepath.Join(filepath.Dir(currentFile), "../..")
 	binaryPath := getBinaryPath()
-	
+
 	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/policyguard")
 	cmd.Dir = projectRoot
-	
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build failed: %v\nOutput: %s", err, output)
 	}
-	
+
 	return nil
 }
 
@@ -67,26 +69,26 @@ func getTestDataPath(path string) string {
 // TestFullPipeline tests the complete analysis pipeline
 func TestFullPipeline(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Create components
 	parser := terraform.New()
 	engine := opa.New()
 	humanReporter := human.New()
 	jsonReporter := jsonreporter.New()
-	
+
 	// Load test policies
 	policyPath := getTestDataPath("policies")
 	err := engine.LoadPoliciesFromDirectory(ctx, policyPath)
 	if err != nil {
 		t.Fatalf("Failed to load policies: %v", err)
 	}
-	
+
 	tests := []struct {
-		name              string
-		terraformFile     string
-		expectViolations  bool
-		minViolations     int
-		expectSeverities  []string
+		name             string
+		terraformFile    string
+		expectViolations bool
+		minViolations    int
+		expectSeverities []string
 	}{
 		{
 			name:             "secure configuration",
@@ -102,7 +104,7 @@ func TestFullPipeline(t *testing.T) {
 			expectSeverities: []string{"critical"},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse Terraform file
@@ -111,29 +113,29 @@ func TestFullPipeline(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse Terraform file: %v", err)
 			}
-			
+
 			if len(resources) == 0 {
 				t.Fatal("No resources parsed from Terraform file")
 			}
-			
+
 			// Evaluate policies
 			result, err := engine.Evaluate(ctx, resources)
 			if err != nil {
 				t.Fatalf("Failed to evaluate policies: %v", err)
 			}
-			
+
 			// Check violations
 			if tt.expectViolations {
 				if len(result.Violations) < tt.minViolations {
 					t.Errorf("Expected at least %d violations, got %d", tt.minViolations, len(result.Violations))
 				}
-				
+
 				// Check for expected severities
 				severityFound := make(map[string]bool)
 				for _, v := range result.Violations {
 					severityFound[v.Severity] = true
 				}
-				
+
 				for _, expectedSev := range tt.expectSeverities {
 					if !severityFound[expectedSev] {
 						t.Errorf("Expected to find violation with severity %s", expectedSev)
@@ -147,44 +149,44 @@ func TestFullPipeline(t *testing.T) {
 					}
 				}
 			}
-			
+
 			// Test human reporter
 			humanBuf := &bytes.Buffer{}
 			report, err := humanReporter.Generate(ctx, result, resources)
 			if err != nil {
 				t.Fatalf("Failed to generate human report: %v", err)
 			}
-			
+
 			err = humanReporter.Write(ctx, report, humanBuf)
 			if err != nil {
 				t.Fatalf("Failed to write human report: %v", err)
 			}
-			
+
 			if humanBuf.Len() == 0 {
 				t.Error("Human report is empty")
 			}
-			
+
 			// Test JSON reporter
 			jsonBuf := &bytes.Buffer{}
 			jsonReport, err := jsonReporter.Generate(ctx, result, resources)
 			if err != nil {
 				t.Fatalf("Failed to generate JSON report: %v", err)
 			}
-			
+
 			err = jsonReporter.Write(ctx, jsonReport, jsonBuf)
 			if err != nil {
 				t.Fatalf("Failed to write JSON report: %v", err)
 			}
-			
+
 			// Validate JSON output
 			var parsedReport types.Report
 			err = json.Unmarshal(jsonBuf.Bytes(), &parsedReport)
 			if err != nil {
 				t.Fatalf("Failed to parse JSON report: %v", err)
 			}
-			
+
 			if parsedReport.Summary.TotalResources != len(resources) {
-				t.Errorf("JSON report resource count mismatch: expected %d, got %d", 
+				t.Errorf("JSON report resource count mismatch: expected %d, got %d",
 					len(resources), parsedReport.Summary.TotalResources)
 			}
 		})
@@ -194,16 +196,16 @@ func TestFullPipeline(t *testing.T) {
 // TestCLIScanCommand tests the CLI scan command
 func TestCLIScanCommand(t *testing.T) {
 	binaryPath := getBinaryPath()
-	
+
 	tests := []struct {
-		name         string
-		args         []string
-		expectError  bool
-		checkOutput  func(t *testing.T, output string)
+		name        string
+		args        []string
+		expectError bool
+		checkOutput func(t *testing.T, output string)
 	}{
 		{
-			name: "scan secure file",
-			args: []string{"scan", getTestDataPath("terraform/secure.tf"), "--policy", filepath.Join(filepath.Dir(getTestDataPath("")), "..", "..", "policies")},
+			name:        "scan secure file",
+			args:        []string{"scan", getTestDataPath("terraform/secure.tf"), "--policy", filepath.Join(filepath.Dir(getTestDataPath("")), "..", "..", "policies")},
 			expectError: false,
 			checkOutput: func(t *testing.T, output string) {
 				if !strings.Contains(output, "Total Resources Scanned:") {
@@ -215,8 +217,8 @@ func TestCLIScanCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "scan insecure file",
-			args: []string{"scan", getTestDataPath("terraform/insecure.tf"), "--policy", filepath.Join(filepath.Dir(getTestDataPath("")), "..", "..", "policies")},
+			name:        "scan insecure file",
+			args:        []string{"scan", getTestDataPath("terraform/insecure.tf"), "--policy", filepath.Join(filepath.Dir(getTestDataPath("")), "..", "..", "policies")},
 			expectError: false,
 			checkOutput: func(t *testing.T, output string) {
 				if !strings.Contains(output, "VIOLATIONS") {
@@ -225,8 +227,8 @@ func TestCLIScanCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "scan with JSON output",
-			args: []string{"scan", getTestDataPath("terraform/secure.tf"), "--format", "json", "--policy", filepath.Join(filepath.Dir(getTestDataPath("")), "..", "..", "policies")},
+			name:        "scan with JSON output",
+			args:        []string{"scan", getTestDataPath("terraform/secure.tf"), "--format", "json", "--policy", filepath.Join(filepath.Dir(getTestDataPath("")), "..", "..", "policies")},
 			expectError: false,
 			checkOutput: func(t *testing.T, output string) {
 				var report types.Report
@@ -237,22 +239,22 @@ func TestCLIScanCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "scan with fail-on-error",
-			args: []string{"scan", getTestDataPath("terraform/insecure.tf"), "--fail-on-error", "--policy", getTestDataPath("policies")},
+			name:        "scan with fail-on-error",
+			args:        []string{"scan", getTestDataPath("terraform/insecure.tf"), "--fail-on-error", "--policy", getTestDataPath("policies")},
 			expectError: true,
 		},
 		{
-			name: "scan non-existent file",
-			args: []string{"scan", "/non/existent/file.tf"},
+			name:        "scan non-existent file",
+			args:        []string{"scan", "/non/existent/file.tf"},
 			expectError: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := exec.Command(binaryPath, tt.args...)
 			output, err := cmd.CombinedOutput()
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none. Output: %s", output)
@@ -262,7 +264,7 @@ func TestCLIScanCommand(t *testing.T) {
 					t.Errorf("Unexpected error: %v\nOutput: %s", err, output)
 				}
 			}
-			
+
 			if tt.checkOutput != nil {
 				tt.checkOutput(t, string(output))
 			}
@@ -270,10 +272,137 @@ func TestCLIScanCommand(t *testing.T) {
 	}
 }
 
+// TestCLIExitCodes verifies the 3-way exit-code contract a CI gate depends on:
+// 0 = clean, 1 = violations found under --fail-on-error, 2 = the scan failed to
+// run. Conflating 1 and 2 would let a broken scan masquerade as findings (or a
+// found violation look like a crash). exitCode extracts the process exit status.
+func TestCLIExitCodes(t *testing.T) {
+	binaryPath := getBinaryPath()
+	policies := getTestDataPath("policies")
+
+	// Precondition: the exit-code contract is only meaningful if the fixtures
+	// actually exercise it. Confirm insecure.tf produces violations and secure.tf
+	// does not, so a broken test policy can't make "violations exit 1" silently
+	// degrade into "clean exit 0" and still pass.
+	assertViolationCount := func(file string, wantNonZero bool) {
+		t.Helper()
+		out, _ := exec.Command(binaryPath, "scan", getTestDataPath(file), "--policy", policies, "--format", "json").CombinedOutput()
+		var report types.Report
+		if err := json.Unmarshal(out, &report); err != nil {
+			t.Fatalf("precondition: could not parse JSON for %s: %v\noutput: %s", file, err, out)
+		}
+		got := len(report.Violations)
+		if wantNonZero && got == 0 {
+			t.Fatalf("precondition: expected %s to produce violations, got 0 (test policy broken?)", file)
+		}
+		if !wantNonZero && got != 0 {
+			t.Fatalf("precondition: expected %s to be clean, got %d violations", file, got)
+		}
+	}
+	assertViolationCount("terraform/insecure.tf", true)
+	assertViolationCount("terraform/secure.tf", false)
+
+	tests := []struct {
+		name string
+		args []string
+		want int
+	}{
+		{
+			name: "clean scan exits 0",
+			args: []string{"scan", getTestDataPath("terraform/secure.tf"), "--fail-on-error", "--policy", policies, "--format", "json"},
+			want: 0,
+		},
+		{
+			name: "violations without --fail-on-error exits 0",
+			args: []string{"scan", getTestDataPath("terraform/insecure.tf"), "--policy", policies, "--format", "json"},
+			want: 0,
+		},
+		{
+			name: "violations with --fail-on-error exits 1",
+			args: []string{"scan", getTestDataPath("terraform/insecure.tf"), "--fail-on-error", "--policy", policies, "--format", "json"},
+			want: 1,
+		},
+		{
+			name: "non-existent target exits 2",
+			args: []string{"scan", "/non/existent/file.tf", "--fail-on-error", "--policy", policies, "--format", "json"},
+			want: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.Command(binaryPath, tt.args...)
+			output, err := cmd.CombinedOutput()
+			if got := exitCode(err); got != tt.want {
+				t.Errorf("exit code = %d, want %d\nargs: %v\noutput: %s", got, tt.want, tt.args, output)
+			}
+		})
+	}
+}
+
+// exitCode returns the process exit status for the error returned by
+// (*exec.Cmd).Run/CombinedOutput: 0 if the command succeeded, the real exit
+// code if it exited non-zero, or -1 if it failed to start.
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	return -1
+}
+
+// TestCLIMultiPathScan verifies the scan command accepts multiple file/dir
+// arguments (as a pre-commit hook passes all changed files) and reports across
+// all of them in one run. Previously scan accepted exactly one path, so a
+// multi-file commit hook would fail with "accepts 1 arg(s)".
+func TestCLIMultiPathScan(t *testing.T) {
+	binaryPath := getBinaryPath()
+	policies := getTestDataPath("policies")
+	secure := getTestDataPath("terraform/secure.tf")
+	insecure := getTestDataPath("terraform/insecure.tf")
+
+	// Two paths at once: must succeed and report the insecure file's violation.
+	out, err := exec.Command(binaryPath, "scan", secure, insecure, "--policy", policies, "--format", "json").CombinedOutput()
+	if err != nil {
+		t.Fatalf("multi-path scan failed: %v\noutput: %s", err, out)
+	}
+	var report types.Report
+	if e := json.Unmarshal(out, &report); e != nil {
+		t.Fatalf("multi-path scan output not valid JSON: %v\n%s", e, out)
+	}
+	if len(report.Violations) == 0 {
+		t.Error("multi-path scan should report the insecure file's violations")
+	}
+
+	// Multi-path with --fail-on-error and a violating file exits 1.
+	_, err = exec.Command(binaryPath, "scan", secure, insecure, "--policy", policies, "--fail-on-error", "--format", "json").CombinedOutput()
+	if got := exitCode(err); got != 1 {
+		t.Errorf("multi-path --fail-on-error exit = %d, want 1", got)
+	}
+
+	// Overlapping paths (the same file passed twice) must not double-count —
+	// pre-commit and `scan . sub/` can pass overlapping paths.
+	once, _ := exec.Command(binaryPath, "scan", insecure, "--policy", policies, "--format", "json").CombinedOutput()
+	twice, _ := exec.Command(binaryPath, "scan", insecure, insecure, "--policy", policies, "--format", "json").CombinedOutput()
+	var r1, r2 types.Report
+	if err := json.Unmarshal(once, &r1); err != nil {
+		t.Fatalf("single scan JSON: %v", err)
+	}
+	if err := json.Unmarshal(twice, &r2); err != nil {
+		t.Fatalf("double scan JSON: %v", err)
+	}
+	if len(r1.Violations) != len(r2.Violations) {
+		t.Errorf("same file passed twice double-counted: %d vs %d violations", len(r2.Violations), len(r1.Violations))
+	}
+}
+
 // TestCLIValidateCommand tests the CLI validate command
 func TestCLIValidateCommand(t *testing.T) {
 	binaryPath := getBinaryPath()
-	
+
 	// Create an invalid policy for testing
 	invalidPolicyPath := filepath.Join(os.TempDir(), "invalid_policy.rego")
 	invalidPolicy := `package invalid
@@ -282,13 +411,13 @@ func TestCLIValidateCommand(t *testing.T) {
 	deny[msg] {
 		invalid syntax here
 	}`
-	
+
 	err := ioutil.WriteFile(invalidPolicyPath, []byte(invalidPolicy), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create invalid policy file: %v", err)
 	}
 	defer os.Remove(invalidPolicyPath)
-	
+
 	tests := []struct {
 		name        string
 		args        []string
@@ -296,8 +425,8 @@ func TestCLIValidateCommand(t *testing.T) {
 		checkOutput func(t *testing.T, output string)
 	}{
 		{
-			name: "validate valid policies",
-			args: []string{"validate", getTestDataPath("policies")},
+			name:        "validate valid policies",
+			args:        []string{"validate", getTestDataPath("policies")},
 			expectError: false,
 			checkOutput: func(t *testing.T, output string) {
 				if !strings.Contains(output, "All policies are valid") {
@@ -306,8 +435,8 @@ func TestCLIValidateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "validate invalid policy",
-			args: []string{"validate", invalidPolicyPath},
+			name:        "validate invalid policy",
+			args:        []string{"validate", invalidPolicyPath},
 			expectError: true,
 			checkOutput: func(t *testing.T, output string) {
 				if !strings.Contains(output, "Error:") {
@@ -316,12 +445,12 @@ func TestCLIValidateCommand(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := exec.Command(binaryPath, tt.args...)
 			output, err := cmd.CombinedOutput()
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none. Output: %s", output)
@@ -331,7 +460,7 @@ func TestCLIValidateCommand(t *testing.T) {
 					t.Errorf("Unexpected error: %v\nOutput: %s", err, output)
 				}
 			}
-			
+
 			if tt.checkOutput != nil {
 				tt.checkOutput(t, string(output))
 			}
@@ -342,54 +471,54 @@ func TestCLIValidateCommand(t *testing.T) {
 // TestCLIPolicyCommands tests the policy list and show commands
 func TestCLIPolicyCommands(t *testing.T) {
 	binaryPath := getBinaryPath()
-	
+
 	t.Run("policy list", func(t *testing.T) {
 		cmd := exec.Command(binaryPath, "policy", "list", "--policy", getTestDataPath("policies"))
 		output, err := cmd.CombinedOutput()
-		
+
 		if err != nil {
 			t.Fatalf("Failed to list policies: %v\nOutput: %s", err, output)
 		}
-		
+
 		if !strings.Contains(string(output), "Available policies") {
 			t.Error("Output missing policies header")
 		}
-		
+
 		// Test JSON format
 		cmd = exec.Command(binaryPath, "policy", "list", "--policy", getTestDataPath("policies"), "--format", "json")
 		output, err = cmd.CombinedOutput()
-		
+
 		if err != nil {
 			t.Fatalf("Failed to list policies in JSON: %v\nOutput: %s", err, output)
 		}
-		
+
 		var policies []interface{}
 		err = json.Unmarshal(output, &policies)
 		if err != nil {
 			t.Errorf("Failed to parse JSON output: %v", err)
 		}
 	})
-	
+
 	t.Run("policy show", func(t *testing.T) {
 		cmd := exec.Command(binaryPath, "policy", "show", "test_policy", "--policy", getTestDataPath("policies"))
 		output, err := cmd.CombinedOutput()
-		
+
 		if err != nil {
 			t.Fatalf("Failed to show policy: %v\nOutput: %s", err, output)
 		}
-		
+
 		if !strings.Contains(string(output), "Policy: test_policy") {
 			t.Error("Output missing policy details")
 		}
-		
+
 		// Test raw format
 		cmd = exec.Command(binaryPath, "policy", "show", "test_policy", "--policy", getTestDataPath("policies"), "--format", "raw")
 		output, err = cmd.CombinedOutput()
-		
+
 		if err != nil {
 			t.Fatalf("Failed to show policy in raw format: %v\nOutput: %s", err, output)
 		}
-		
+
 		if !strings.Contains(string(output), "package policyguard") {
 			t.Error("Raw output missing policy content")
 		}
@@ -399,44 +528,44 @@ func TestCLIPolicyCommands(t *testing.T) {
 // TestAnalyzerIntegration tests the analyzer component integration
 func TestAnalyzerIntegration(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Create components
 	parser := terraform.New()
 	engine := opa.New()
 	reporter := human.New()
-	
+
 	// Load policies
 	err := engine.LoadPoliciesFromDirectory(ctx, getTestDataPath("policies"))
 	if err != nil {
 		t.Fatalf("Failed to load policies: %v", err)
 	}
-	
+
 	// Create analyzer
 	analyzer := analyzer.New(parser, engine, nil, reporter)
-	
+
 	// Test file analysis
 	t.Run("analyze file", func(t *testing.T) {
 		report, err := analyzer.AnalyzeFile(ctx, getTestDataPath("terraform/insecure.tf"))
 		if err != nil {
 			t.Fatalf("Failed to analyze file: %v", err)
 		}
-		
+
 		if report.Summary.TotalResources == 0 {
 			t.Error("No resources found in analysis")
 		}
-		
+
 		if report.Summary.TotalViolations == 0 {
 			t.Error("Expected violations but found none")
 		}
 	})
-	
+
 	// Test directory analysis
 	t.Run("analyze directory", func(t *testing.T) {
 		report, err := analyzer.AnalyzeDirectory(ctx, getTestDataPath("terraform"))
 		if err != nil {
 			t.Fatalf("Failed to analyze directory: %v", err)
 		}
-		
+
 		// Should have resources from both files
 		if report.Summary.TotalResources < 2 {
 			t.Error("Expected resources from multiple files")
@@ -447,42 +576,42 @@ func TestAnalyzerIntegration(t *testing.T) {
 // TestConcurrentAnalysis tests concurrent analysis of multiple files
 func TestConcurrentAnalysis(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Create components
 	parser := terraform.New()
 	engine := opa.New()
 	reporter := human.New()
-	
+
 	// Load policies
 	err := engine.LoadPoliciesFromDirectory(ctx, getTestDataPath("policies"))
 	if err != nil {
 		t.Fatalf("Failed to load policies: %v", err)
 	}
-	
+
 	// Create analyzer
 	analyzer := analyzer.New(parser, engine, nil, reporter)
-	
+
 	// Analyze multiple files concurrently
 	files := []string{
 		getTestDataPath("terraform/secure.tf"),
 		getTestDataPath("terraform/insecure.tf"),
 	}
-	
+
 	type result struct {
 		file   string
 		report *types.Report
 		err    error
 	}
-	
+
 	results := make(chan result, len(files))
-	
+
 	for _, file := range files {
 		go func(f string) {
 			report, err := analyzer.AnalyzeFile(ctx, f)
 			results <- result{file: f, report: report, err: err}
 		}(file)
 	}
-	
+
 	// Collect results
 	for i := 0; i < len(files); i++ {
 		select {
@@ -503,11 +632,11 @@ func TestPerformance(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping performance test in short mode")
 	}
-	
+
 	// Create a larger test file
 	largeTfPath := filepath.Join(os.TempDir(), "large_test.tf")
 	defer os.Remove(largeTfPath)
-	
+
 	// Generate a file with many resources
 	var content strings.Builder
 	for i := 0; i < 100; i++ {
@@ -529,31 +658,31 @@ resource "aws_instance" "instance_%d" {
 }
 `, i, i, i))
 	}
-	
+
 	err := ioutil.WriteFile(largeTfPath, []byte(content.String()), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create large test file: %v", err)
 	}
-	
+
 	// Measure analysis time
 	start := time.Now()
-	
+
 	cmd := exec.Command(getBinaryPath(), "scan", largeTfPath, "--policy", filepath.Join(filepath.Dir(getTestDataPath("")), "..", "..", "policies"))
 	output, err := cmd.CombinedOutput()
-	
+
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		t.Fatalf("Failed to analyze large file: %v\nOutput: %s", err, output)
 	}
-	
+
 	t.Logf("Analyzed 200 resources in %v", duration)
-	
+
 	// Check that it completed within reasonable time
 	if duration > 30*time.Second {
 		t.Errorf("Analysis took too long: %v", duration)
 	}
-	
+
 	// Verify results
 	if !strings.Contains(string(output), "Total Resources Scanned: 200") {
 		t.Error("Expected 200 resources in output")

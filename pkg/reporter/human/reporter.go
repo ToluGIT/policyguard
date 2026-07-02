@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,11 +22,11 @@ func New() *Reporter {
 // Generate creates a report from policy results
 func (r *Reporter) Generate(ctx context.Context, result *types.PolicyResult, resources []types.Resource) (*types.Report, error) {
 	report := &types.Report{
-		ID:        fmt.Sprintf("report-%d", time.Now().Unix()),
-		Timestamp: time.Now(),
-		Resources: resources,
+		ID:         fmt.Sprintf("report-%d", time.Now().Unix()),
+		Timestamp:  time.Now(),
+		Resources:  resources,
 		Violations: result.Violations,
-		Metadata:  result.Metadata,
+		Metadata:   result.Metadata,
 	}
 
 	// Calculate summary
@@ -67,7 +68,9 @@ func (r *Reporter) Write(ctx context.Context, report *types.Report, writer io.Wr
 	fmt.Fprintf(writer, "%s\n", strings.Repeat("-", 40))
 	fmt.Fprintf(writer, "Total Resources Scanned: %d\n", report.Summary.TotalResources)
 	fmt.Fprintf(writer, "Total Violations Found:  %d\n", report.Summary.TotalViolations)
-	fmt.Fprintf(writer, "Pass Rate:               %.1f%%\n\n", report.Summary.PassRate)
+	fmt.Fprintf(writer, "Pass Rate:               %.1f%%\n", report.Summary.PassRate)
+	writeSuppressionSummary(writer, report)
+	fmt.Fprintln(writer)
 
 	// Violations by severity
 	if len(report.Summary.ViolationsBySeverity) > 0 {
@@ -123,13 +126,59 @@ func (r *Reporter) writeViolation(writer io.Writer, violation types.PolicyViolat
 	fmt.Fprintf(writer, "   Resource: %s\n", violation.ResourceID)
 	fmt.Fprintf(writer, "   Location: %s:%d:%d\n", violation.Location.File, violation.Location.Line, violation.Location.Column)
 	fmt.Fprintf(writer, "   Policy:   %s\n", violation.PolicyID)
-	
+
 	if violation.Details != "" {
 		fmt.Fprintf(writer, "   Details:  %s\n", violation.Details)
 	}
-	
+
 	if violation.Remediation != "" {
 		fmt.Fprintf(writer, "   Fix:      %s\n", violation.Remediation)
+	}
+
+	if violation.RemediationSnippet != "" {
+		fmt.Fprintf(writer, "   Suggested HCL:\n")
+		for _, line := range strings.Split(violation.RemediationSnippet, "\n") {
+			fmt.Fprintf(writer, "     %s\n", line)
+		}
+	}
+}
+
+// writeSuppressionSummary reports how many findings were suppressed and which
+// policies generated the most suppressions — a leading indicator of where
+// precision work (or a noisy policy) should be looked at. No output when nothing
+// was suppressed.
+func writeSuppressionSummary(writer io.Writer, report *types.Report) {
+	if report.Metadata == nil {
+		return
+	}
+	count, ok := report.Metadata["suppressed_count"].(int)
+	if !ok || count == 0 {
+		return
+	}
+	fmt.Fprintf(writer, "Suppressed Findings:     %d (acknowledged via suppression config)\n", count)
+
+	byPolicy, ok := report.Metadata["suppressed_by_policy"].(map[string]int)
+	if !ok || len(byPolicy) == 0 {
+		return
+	}
+	// Rank policies by suppression count (desc), tie-break by name for stable output.
+	type pc struct {
+		policy string
+		count  int
+	}
+	ranked := make([]pc, 0, len(byPolicy))
+	for p, c := range byPolicy {
+		ranked = append(ranked, pc{p, c})
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].count != ranked[j].count {
+			return ranked[i].count > ranked[j].count
+		}
+		return ranked[i].policy < ranked[j].policy
+	})
+	fmt.Fprintf(writer, "  Most-suppressed policies:\n")
+	for _, r := range ranked {
+		fmt.Fprintf(writer, "    %-32s %d\n", r.policy, r.count)
 	}
 }
 
