@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 104" fill="none" role="img" aria-label="PolicyGuard">
+  
+  <path d="M50 6 L88 20 V54 C88 80 50 98 50 98 C50 98 12 80 12 54 V20 Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"></path>
+  <path d="M37 42 L49 52 L37 62" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M55 62 H69" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"></path>
+</svg>

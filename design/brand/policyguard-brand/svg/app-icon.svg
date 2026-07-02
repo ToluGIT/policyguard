@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="PolicyGuard">
+  
+  <rect width="512" height="512" rx="112" fill="#0A0A0B"></rect>
+  <g fill="none" transform="translate(106 96) scale(3)">
+    <path d="M50 6 L88 20 V54 C88 80 50 98 50 98 C50 98 12 80 12 54 V20 Z" stroke="#F4F4F5" stroke-width="3" stroke-linejoin="round"></path>
+    <path d="M37 42 L49 52 L37 62" stroke="#C2F24A" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M55 62 H69" stroke="#C2F24A" stroke-width="4.5" stroke-linecap="round"></path>
+  </g>
+</svg>

@@ -49,9 +49,22 @@ policyguard-*.txt
 results.*
 full_scan_report.txt
 
-# Local test binary
-policyguard
+# Local test binary (root only — not the cmd/policyguard package dir)
+/policyguard
+/policyguard-new
+/policyguard-test
 
 # RELEASE GUIDE
 .github/RELEASE_GUIDE.md
+
+# Claude Code — never commit anything under .claude/
+.claude/
+
+# Scratch / working dirs
+.tmp/
+**/__pycache__/
+*.log
+
+# Redundant design archives (source lives in design/brand/ and docs/design/)
+design/PolicyGuard Dashboard Mockup.zip
 

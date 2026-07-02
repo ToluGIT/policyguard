@@ -1,0 +1,739 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "mcp-excalidraw-server",
+  "elements": [
+    {
+      "id": "v2_bg",
+      "type": "rectangle",
+      "x": -40,
+      "y": -40,
+      "width": 1340,
+      "height": 920,
+      "backgroundColor": "#0A0A0B",
+      "strokeColor": "#26272B",
+      "strokeWidth": 1,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.446Z",
+      "updatedAt": "2026-06-30T18:56:34.446Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3wqgzex98jf4",
+      "type": "text",
+      "x": 60,
+      "y": 8,
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "PolicyGuard — Architecture",
+      "fontSize": 28,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.447Z",
+      "updatedAt": "2026-06-30T18:56:34.447Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3x2syfdlj1uyy",
+      "type": "text",
+      "x": 60,
+      "y": 50,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "Terraform / OpenTofu IaC security scanning, built on OPA / Rego",
+      "fontSize": 14,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.448Z",
+      "updatedAt": "2026-06-30T18:56:34.448Z",
+      "version": 1
+    },
+    {
+      "id": "v2_in_cli",
+      "type": "rectangle",
+      "x": 60,
+      "y": 110,
+      "width": 340,
+      "height": 92,
+      "backgroundColor": "transparent",
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.448Z",
+      "updatedAt": "2026-06-30T18:56:34.448Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xeo6tfb8rvy",
+      "type": "text",
+      "x": 84,
+      "y": 128,
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "CLI",
+      "fontSize": 18,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.448Z",
+      "updatedAt": "2026-06-30T18:56:34.448Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xuhtxuxvnv8a",
+      "type": "text",
+      "x": 84,
+      "y": 158,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "policyguard scan",
+      "fontSize": 13,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.449Z",
+      "updatedAt": "2026-06-30T18:56:34.449Z",
+      "version": 1
+    },
+    {
+      "id": "v2_in_gui",
+      "type": "rectangle",
+      "x": 450,
+      "y": 110,
+      "width": 340,
+      "height": 92,
+      "backgroundColor": "transparent",
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.449Z",
+      "updatedAt": "2026-06-30T18:56:34.449Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xeng4ye4zz8f",
+      "type": "text",
+      "x": 474,
+      "y": 128,
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "Web GUI",
+      "fontSize": 18,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.467Z",
+      "updatedAt": "2026-06-30T18:56:34.467Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3x6rbrz8n75wg",
+      "type": "text",
+      "x": 474,
+      "y": 158,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "policyguard serve",
+      "fontSize": 13,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.467Z",
+      "updatedAt": "2026-06-30T18:56:34.467Z",
+      "version": 1
+    },
+    {
+      "id": "v2_in_ci",
+      "type": "rectangle",
+      "x": 840,
+      "y": 110,
+      "width": 360,
+      "height": 92,
+      "backgroundColor": "transparent",
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.467Z",
+      "updatedAt": "2026-06-30T18:56:34.467Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xkmyacptlmnd",
+      "type": "text",
+      "x": 864,
+      "y": 128,
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "CI / CD",
+      "fontSize": 18,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.468Z",
+      "updatedAt": "2026-06-30T18:56:34.468Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xmtp6whh1t4",
+      "type": "text",
+      "x": 864,
+      "y": 158,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "Action / GitLab / Jenkins / pre-commit",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.468Z",
+      "updatedAt": "2026-06-30T18:56:34.468Z",
+      "version": 1
+    },
+    {
+      "id": "v2_parser",
+      "type": "rectangle",
+      "x": 340,
+      "y": 280,
+      "width": 560,
+      "height": 92,
+      "backgroundColor": "transparent",
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.468Z",
+      "updatedAt": "2026-06-30T18:56:34.468Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xy9s1025r40b",
+      "type": "text",
+      "x": 364,
+      "y": 298,
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "Parser   (HCL to Resources)",
+      "fontSize": 18,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.468Z",
+      "updatedAt": "2026-06-30T18:56:34.468Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xjylnkli6sb",
+      "type": "text",
+      "x": 364,
+      "y": 330,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": ".tf / .tofu / .tf.json  +  variable & module resolution",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.468Z",
+      "updatedAt": "2026-06-30T18:56:34.468Z",
+      "version": 1
+    },
+    {
+      "id": "v2_engine",
+      "type": "rectangle",
+      "x": 340,
+      "y": 450,
+      "width": 560,
+      "height": 120,
+      "backgroundColor": "transparent",
+      "strokeColor": "#C2F24A",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.469Z",
+      "updatedAt": "2026-06-30T18:56:34.469Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xr0xvxadvbjj",
+      "type": "text",
+      "x": 364,
+      "y": 468,
+      "strokeColor": "#C2F24A",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "OPA Engine   (Rego evaluation)",
+      "fontSize": 18,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.469Z",
+      "updatedAt": "2026-06-30T18:56:34.469Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xsc31znv8cdp",
+      "type": "text",
+      "x": 364,
+      "y": 500,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "capability sandbox: no http.send / no network",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.469Z",
+      "updatedAt": "2026-06-30T18:56:34.469Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xzumfj7wyp4l",
+      "type": "text",
+      "x": 364,
+      "y": 524,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "prepared query  +  input.all_resources (sibling-aware)",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.469Z",
+      "updatedAt": "2026-06-30T18:56:34.469Z",
+      "version": 1
+    },
+    {
+      "id": "v2_policies",
+      "type": "rectangle",
+      "x": 960,
+      "y": 450,
+      "width": 240,
+      "height": 120,
+      "backgroundColor": "transparent",
+      "strokeColor": "#C2F24A",
+      "strokeWidth": 1.5,
+      "strokeStyle": "dashed",
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.470Z",
+      "updatedAt": "2026-06-30T18:56:34.470Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xvjmmqz3ur1g",
+      "type": "text",
+      "x": 984,
+      "y": 470,
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "Policies (Rego)",
+      "fontSize": 16,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.470Z",
+      "updatedAt": "2026-06-30T18:56:34.470Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xtew0rr6ecid",
+      "type": "text",
+      "x": 984,
+      "y": 502,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "AWS + Azure",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.470Z",
+      "updatedAt": "2026-06-30T18:56:34.470Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xbl61nw47e6",
+      "type": "text",
+      "x": 984,
+      "y": 526,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "embedded in binary",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.471Z",
+      "updatedAt": "2026-06-30T18:56:34.471Z",
+      "version": 1
+    },
+    {
+      "id": "v2_analyzer",
+      "type": "rectangle",
+      "x": 340,
+      "y": 640,
+      "width": 560,
+      "height": 92,
+      "backgroundColor": "transparent",
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.471Z",
+      "updatedAt": "2026-06-30T18:56:34.471Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3x5aift2iysjb",
+      "type": "text",
+      "x": 364,
+      "y": 658,
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "Analyzer",
+      "fontSize": 18,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.471Z",
+      "updatedAt": "2026-06-30T18:56:34.471Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3x9rv5dcg4hye",
+      "type": "text",
+      "x": 364,
+      "y": 690,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "orchestrate / suppress / remediation / deterministic sort",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.472Z",
+      "updatedAt": "2026-06-30T18:56:34.472Z",
+      "version": 1
+    },
+    {
+      "id": "v2_reporters",
+      "type": "rectangle",
+      "x": 60,
+      "y": 800,
+      "width": 1140,
+      "height": 56,
+      "backgroundColor": "transparent",
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "createdAt": "2026-06-30T18:56:34.472Z",
+      "updatedAt": "2026-06-30T18:56:34.472Z",
+      "version": 1
+    },
+    {
+      "id": "mr10cr3xaohdudl0xh",
+      "type": "text",
+      "x": 84,
+      "y": 814,
+      "strokeColor": "#F4F4F5",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "text": "Reporters:  human / json / junit / sarif (CWE + fingerprints) / compliance CSV / html dashboard",
+      "fontSize": 13,
+      "fontFamily": 3,
+      "createdAt": "2026-06-30T18:56:34.472Z",
+      "updatedAt": "2026-06-30T18:56:34.472Z",
+      "version": 1
+    },
+    {
+      "id": "mr113gv5u4vbydae2yk",
+      "type": "arrow",
+      "x": 342.86297948237325,
+      "y": 205.19668336411144,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          164.2740410352535,
+          71.60663327177713
+        ]
+      ],
+      "start": {
+        "id": "v2_in_cli"
+      },
+      "end": {
+        "id": "v2_parser"
+      },
+      "endArrowhead": "triangle",
+      "createdAt": "2026-06-30T19:17:20.838Z",
+      "updatedAt": "2026-06-30T19:17:20.838Z",
+      "version": 1,
+      "startBinding": {
+        "elementId": "v2_in_cli",
+        "focus": 0,
+        "gap": 8
+      },
+      "endBinding": {
+        "elementId": "v2_parser",
+        "focus": 0,
+        "gap": 8
+      }
+    },
+    {
+      "id": "mr113gv6yw1qoiixv6",
+      "type": "arrow",
+      "x": 620,
+      "y": 210,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          62
+        ]
+      ],
+      "start": {
+        "id": "v2_in_gui"
+      },
+      "end": {
+        "id": "v2_parser"
+      },
+      "endArrowhead": "triangle",
+      "createdAt": "2026-06-30T19:17:20.838Z",
+      "updatedAt": "2026-06-30T19:17:20.838Z",
+      "version": 1,
+      "startBinding": {
+        "elementId": "v2_in_gui",
+        "focus": 0,
+        "gap": 8
+      },
+      "endBinding": {
+        "elementId": "v2_parser",
+        "focus": 0,
+        "gap": 8
+      }
+    },
+    {
+      "id": "mr113gv6nm7u3ewb1nl",
+      "type": "arrow",
+      "x": 904.4020585346851,
+      "y": 205.1291251227588,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -168.80411706937025,
+          71.74174975448238
+        ]
+      ],
+      "start": {
+        "id": "v2_in_ci"
+      },
+      "end": {
+        "id": "v2_parser"
+      },
+      "endArrowhead": "triangle",
+      "createdAt": "2026-06-30T19:17:20.839Z",
+      "updatedAt": "2026-06-30T19:17:20.839Z",
+      "version": 1,
+      "startBinding": {
+        "elementId": "v2_in_ci",
+        "focus": 0,
+        "gap": 8
+      },
+      "endBinding": {
+        "elementId": "v2_parser",
+        "focus": 0,
+        "gap": 8
+      }
+    },
+    {
+      "id": "mr113gv61t461odr419",
+      "type": "arrow",
+      "x": 620,
+      "y": 380,
+      "strokeColor": "#C2F24A",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          62
+        ]
+      ],
+      "start": {
+        "id": "v2_parser"
+      },
+      "end": {
+        "id": "v2_engine"
+      },
+      "endArrowhead": "triangle",
+      "createdAt": "2026-06-30T19:17:20.839Z",
+      "updatedAt": "2026-06-30T19:17:20.839Z",
+      "version": 1,
+      "startBinding": {
+        "elementId": "v2_parser",
+        "focus": 0,
+        "gap": 8
+      },
+      "endBinding": {
+        "elementId": "v2_engine",
+        "focus": 0,
+        "gap": 8
+      }
+    },
+    {
+      "id": "mr113gv622rtfde830p",
+      "type": "arrow",
+      "x": 952,
+      "y": 510,
+      "strokeColor": "#C2F24A",
+      "strokeWidth": 1.5,
+      "strokeStyle": "dashed",
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -44,
+          0
+        ]
+      ],
+      "start": {
+        "id": "v2_policies"
+      },
+      "end": {
+        "id": "v2_engine"
+      },
+      "endArrowhead": "triangle",
+      "createdAt": "2026-06-30T19:17:20.840Z",
+      "updatedAt": "2026-06-30T19:17:20.840Z",
+      "version": 1,
+      "startBinding": {
+        "elementId": "v2_policies",
+        "focus": 0,
+        "gap": 8
+      },
+      "endBinding": {
+        "elementId": "v2_engine",
+        "focus": 0,
+        "gap": 8
+      }
+    },
+    {
+      "id": "mr113gv6df2d6mbvuah",
+      "type": "arrow",
+      "x": 620,
+      "y": 578,
+      "strokeColor": "#C2F24A",
+      "strokeWidth": 2,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          54
+        ]
+      ],
+      "start": {
+        "id": "v2_engine"
+      },
+      "end": {
+        "id": "v2_analyzer"
+      },
+      "endArrowhead": "triangle",
+      "createdAt": "2026-06-30T19:17:20.840Z",
+      "updatedAt": "2026-06-30T19:17:20.840Z",
+      "version": 1,
+      "startBinding": {
+        "elementId": "v2_engine",
+        "focus": 0,
+        "gap": 8
+      },
+      "endBinding": {
+        "elementId": "v2_analyzer",
+        "focus": 0,
+        "gap": 8
+      }
+    },
+    {
+      "id": "mr113gv6jq2mb1qxm7",
+      "type": "arrow",
+      "x": 623.8014250808087,
+      "y": 739.9802361474834,
+      "strokeColor": "#6B6E76",
+      "strokeWidth": 1.5,
+      "roughness": 0,
+      "fontSize": 20,
+      "fontFamily": 5,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3.664755472185334,
+          52.03952770503315
+        ]
+      ],
+      "start": {
+        "id": "v2_analyzer"
+      },
+      "end": {
+        "id": "v2_reporters"
+      },
+      "endArrowhead": "triangle",
+      "createdAt": "2026-06-30T19:17:20.840Z",
+      "updatedAt": "2026-06-30T19:17:20.840Z",
+      "version": 1,
+      "startBinding": {
+        "elementId": "v2_analyzer",
+        "focus": 0,
+        "gap": 8
+      },
+      "endBinding": {
+        "elementId": "v2_reporters",
+        "focus": 0,
+        "gap": 8
+      }
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff",
+    "gridSize": null
+  },
+  "files": {}
+}

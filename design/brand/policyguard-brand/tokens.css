@@ -1,0 +1,27 @@
+:root {
+  /* ── Surfaces (terminal-mono, dark-first) ── */
+  --pg-bg:        #0A0A0B; /* app background / canvas */
+  --pg-surface:   #141417; /* small inset wells */
+  --pg-surface-2: #1B1C20; /* nested inputs */
+  --pg-border:    #26272B; /* 1px hairlines */
+
+  /* ── Text ── */
+  --pg-text:      #F4F4F5;
+  --pg-text-dim:  #6B6E76;
+
+  /* ── Action accent (the ONE structural accent) ── */
+  --pg-accent:        #C2F24A; /* lime — CTAs, active nav, brand prompt */
+  --pg-accent-hover:  #CFF65E;
+  --pg-accent-on-light: #5C8A00; /* darkened lime for light backgrounds */
+
+  /* ── Severity scale (semantic only) ── */
+  --pg-critical: #F4604D;
+  --pg-high:     #E8853D;
+  --pg-medium:   #D8B23D;
+  --pg-low:      #5B8FB0;
+  --pg-info:     #6B6E76;
+  --pg-pass:     #3FCF8E;
+
+  /* ── Type ── */
+  --pg-font: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

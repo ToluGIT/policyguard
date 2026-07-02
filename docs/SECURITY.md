@@ -53,6 +53,60 @@ This guide provides security best practices for using PolicyGuard and writing se
    chmod 600 report.json
    ```
 
+### Securing PolicyGuard Itself (engine threat model)
+
+PolicyGuard parses untrusted Infrastructure-as-Code and **loads and executes Rego policies** from the directory given by `--policy`. A policy is therefore executable code, and the input it runs against may contain sensitive values (for example, a credential hardcoded in a `.tf` file). The engine treats its own attack surface as a first-class concern.
+
+| Threat | Control | Status |
+|--------|---------|--------|
+| A malicious policy exfiltrates the parsed infrastructure (which may contain hardcoded credentials) by calling a network built-in such as `http.send` or `net.lookup_ip_addr`. | The OPA engine is compiled and evaluated with a restricted capability set that **removes every non-deterministic built-in** (`http.send`, `net.lookup_ip_addr`, `opa.runtime`, `io.jwt.encode_sign`, `io.jwt.encode_sign_raw`, `io.jwt.decode_verify`, `rand.intn`, `time.now_ns`, `uuid.rfc4122`) and disallows all outbound network access (`AllowNet` is empty). A policy that references one of these fails to compile, so the restriction is enforced **at load time, before any evaluation runs**. | Implemented (`pkg/policy/opa/engine.go`, `restrictedCapabilities`). |
+| A scan that errors (failed policy load, unparseable file) silently passes a CI gate, or a real violation is mistaken for a crash. | Distinct exit codes: **0** clean, **1** violations found under `--fail-on-error`, **2** the scan failed to run (bad input, unreadable/invalid policy, internal error). A broken scan fails the build with a code distinguishable from "violations found". | Implemented (`cmd/policyguard/main.go`; guarded by `TestCLIExitCodes`). |
+| A report or log re-exposes a credential found in the scanned IaC. | Treat report files as sensitive (`chmod 600`); JSON output is full-fidelity by design. Do not echo report contents into world-readable CI logs on public repositories. | Operational guidance; masking of credential-like values is on the roadmap. |
+
+**Design principle:** a security policy is a *pure function of its input*. Nothing a legitimate misconfiguration check needs is non-deterministic, so removing those built-ins costs the policy author nothing while closing the exfiltration path. If you maintain custom policies, keep them pure — a policy that needs the network is doing something a policy should not.
+
+**Defense in depth still applies:** the capability sandbox does not remove the value of reviewing custom policies before use (above). Load policies from trusted, version-controlled sources and review changes.
+
+### Hosting the GUI
+
+`policyguard serve` starts a web server that accepts **untrusted uploaded/pasted Terraform** and scans it in-process. Its attack surface is treated as first-class.
+
+| Threat | Control |
+|--------|---------|
+| A remote caller runs untrusted Rego by pointing the engine at an attacker-controlled policy directory. | The server **only** ever loads the trusted, embedded policy set (`LoadEmbeddedPolicies`). There is no request parameter that selects a `--policy` path. The OPA capability sandbox (above) still applies on top. |
+| Path traversal — an upload filename or a finding's recorded path reads/writes outside the scan sandbox. | Upload filenames are reduced to a sanitized base name (no separators, allowlisted characters); uploads land only in a per-request `os.MkdirTemp` dir. Evidence is read by joining that temp dir with each finding's path **after** it has been rebased to a guaranteed-relative, no-`..` name — a path that resolves outside the temp dir falls back to its base name and cannot escape. |
+| Resource exhaustion / DoS. | Request body capped with `http.MaxBytesReader`; per-request size, file-count, and scan-timeout (`context`) limits, tightened in `--public` mode (1 MiB / 25 files / 15 s vs 16 MiB / 200 files / 60 s); a per-client fixed-window rate limit whose table is pruned so it can't grow without bound; multipart spill files are cleaned up after each request. |
+| Cross-site scripting from crafted IaC. | The dashboard fragment is rendered by `html/template` (context-aware auto-escaping), so a resource name or value containing `<img onerror=…>` / `</script>` is inert text. Guarded by `TestScanEscapesMaliciousContent`. A strict Content-Security-Policy (`script-src 'self'`, `default-src 'none'`) plus `X-Frame-Options: DENY` and `nosniff` are sent on every response. |
+| Exposure on an untrusted network. | The server **binds to `127.0.0.1` by default** — it is not reachable off-host unless you opt in. `--public` is the explicit, hardened mode for container hosting (upload/paste only — no filesystem path scanning — with the tighter limits above). Uploaded content is written to a temp dir and **deleted after each scan**. |
+
+Run the GUI behind your own TLS-terminating reverse proxy if you expose it beyond localhost. As with any scanner, treat the IaC you upload as sensitive — it is processed on the host running `serve`.
+
+### Supply-chain integrity
+
+A scanner you run in CI with access to your infrastructure code is itself part of
+your supply chain. PolicyGuard's releases are built and signed so you can verify
+*what* you are running and *where* it came from before you trust it.
+
+| Concern | Control |
+|---------|---------|
+| A tampered binary is substituted for a release. | Every release publishes a `checksums.txt` (SHA-256 of each binary). Verify with `sha256sum --check --ignore-missing checksums.txt`. |
+| The checksums file itself is forged. | `checksums.txt` is signed with **cosign keyless signing**; the signature (`.sig`) and certificate (`.pem`) are bound to the release workflow's GitHub OIDC identity — there is no long-lived private key to steal. Verify with `cosign verify-blob` against `--certificate-identity-regexp 'https://github.com/ToluGIT/policyguard/\.github/workflows/release\.yml@refs/tags/.+'` (pinned to the release workflow on a tag, so a signature from any other workflow does not verify) and `--certificate-oidc-issuer 'https://token.actions.githubusercontent.com'` (full command in the README). |
+| A tampered container image is pulled. | The GHCR image is signed by **immutable digest** (not tag) with the same keyless identity, and is built with provenance + SBOM attestations. Verify with `cosign verify`. |
+| You cannot tell what went into a build. | Each release attaches an **SPDX SBOM** (`policyguard.sbom.spdx.json`) listing the Go module graph compiled into the binaries. |
+| Policy integrity. | The default policy set is **embedded in the binary** (`//go:embed all:policies`), so verifying the binary's checksum/signature also verifies the policies it ships with — they are not loaded from a separately-mutable location at runtime unless you pass `--policy`. |
+
+The signing and SBOM steps run in the release workflow
+(`.github/workflows/release.yml`) only on tag builds, using GitHub Actions OIDC
+(`id-token: write`) — no signing secret is stored in the repository.
+
+**Note on the container vs. the release binaries.** The container image is built
+*separately* from the downloadable release binaries (both from the same source
+commit) so the image can be multi-arch (amd64/arm64). Go builds are not
+guaranteed bit-for-bit identical across jobs, so do not expect the in-container
+binary to match a release binary's checksum. Verify the image with its own
+signature (`cosign verify ghcr.io/...`), and verify a downloaded binary against
+the signed `checksums.txt` — each is signed against the build that produced it.
+
 ## Infrastructure Security Principles
 
 ### 1. Principle of Least Privilege
