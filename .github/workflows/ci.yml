@@ -50,6 +50,13 @@ jobs:
     
     - name: Run tests
       shell: bash
+      env:
+        # Pure-Go builds (PolicyGuard has no cgo deps). This avoids a
+        # macOS + Go 1.22 external-linker bug that produced a test binary
+        # missing the Mach-O LC_UUID load command, which the newer macOS
+        # dyld rejects before any test runs. It also matches how the release
+        # binaries and container images are built.
+        CGO_ENABLED: "0"
       run: |
         go test -v $(go list ./... | grep -v /examples)
 
@@ -60,6 +67,8 @@ jobs:
 
     - name: Generate coverage report
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
+      env:
+        CGO_ENABLED: "0"
       run: |
         go test -coverprofile=coverage.out $(go list ./... | grep -v /examples)
         go tool cover -html=coverage.out -o coverage.html

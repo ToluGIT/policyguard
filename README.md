@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <b>Catch the Terraform/OpenTofu misconfigurations that matter — before they reach the cloud.</b><br>
+  <b>Catch the Terraform/OpenTofu misconfigurations that matter - before they reach the cloud.</b><br>
   An open, auditable IaC security scanner built on OPA/Rego, with a measured precision you can actually gate a pipeline on.
 </p>
 
@@ -20,24 +20,24 @@
 PolicyGuard evaluates every resource in your Terraform/OpenTofu against security
 policies written in **Rego** (Open Policy Agent). Every finding traces to a policy
 you can open and read, carries a concrete fix, and maps to a standard weakness
-(CWE) — and the accuracy is a **measured, reproducible number**, not a marketing
+(CWE) - and the accuracy is a **measured, reproducible number**, not a marketing
 claim.
 
 <p align="center">
-  <img src="docs/design/dashboard.png" alt="PolicyGuard dashboard — severity cards, findings table, and a finding-detail panel with evidence and remediation" width="880">
+  <img src="docs/design/dashboard.png" alt="PolicyGuard dashboard - severity cards, findings table, and a finding-detail panel with evidence and remediation" width="880">
 </p>
 
 <sub>The dashboard, rendered from a real scan. Use it live in the browser
 (<code>policyguard serve</code>) or as a self-contained HTML report
-(<code>--format html</code>) — same view, no mocked data.</sub>
+(<code>--format html</code>) - same view, no mocked data.</sub>
 
 ### Why PolicyGuard
 
 - **Measured, not asserted.** On its committed benchmark corpus the core policy set
-  scores **precision 1.00 / recall 0.95 (F1 0.98)** across 18 AWS + Azure policies —
+  scores **precision 1.00 / recall 0.95 (F1 0.98)** across 18 AWS + Azure policies -
   reproduce it with `make benchmark`. The one remaining false negative is kept
   visible in the corpus, not hidden ([benchmarks/](benchmarks/README.md)).
-- **Transparent.** Policies are open Rego files you can read and extend — no opaque
+- **Transparent.** Policies are open Rego files you can read and extend - no opaque
   built-in matching. Each finding shows the offending source line and a diff-style fix.
 - **Standards-correct.** SARIF 2.1.0 with stable fingerprints + CWE tags (loads in
   GitHub code scanning); compliance CSV for GRC.
@@ -48,7 +48,7 @@ claim.
 
 > **Scope, honestly.** PolicyGuard is a focused Terraform/OpenTofu scanner for AWS
 > (deep) and Azure (growing). It does not match the check-count breadth of
-> Checkov/KICS or the multi-IaC speed of Trivy — those are excellent, more mature
+> Checkov/KICS or the multi-IaC speed of Trivy - those are excellent, more mature
 > tools. PolicyGuard's lane is **transparency, measured accuracy, and standards
 > fidelity** in that narrower scope. [Full comparison ↓](#how-policyguard-compares)
 
@@ -67,7 +67,7 @@ deterministic ordering), and a **reporter** emits the format you asked for.
 
 [![Watch the demo](https://raw.githubusercontent.com/ToluGIT/policyguard/main/policyguard-thumbnail.png)](https://raw.githubusercontent.com/ToluGIT/policyguard/main/policyguard.mp4)
 
-Or try the live dashboard at **[policyguard.tolubanji.com](https://policyguard.tolubanji.com)** — paste or upload Terraform/OpenTofu and scan it in the browser.
+Or try the live dashboard at **[policyguard.tolubanji.com](https://policyguard.tolubanji.com)** - paste or upload Terraform/OpenTofu and scan it in the browser.
 
 ## Installation
 
@@ -191,7 +191,7 @@ PolicyGuard supports multiple output formats:
 - **junit**: JUnit XML format for CI systems
 - **sarif**: SARIF 2.1.0 for GitHub/GitLab integration (with CWE tags and stable fingerprints)
 - **compliance**: CSV mapping each finding to its CWE control(s) and remediation, for audit/GRC workflows
-- **html**: a self-contained, interactive dashboard (the GUI) — see below
+- **html**: a self-contained, interactive dashboard (the GUI) - see below
 
 ```bash
 # JSON output
@@ -212,10 +212,10 @@ policyguard scan ./infra --format html --output report.html
 
 ### Dashboard (GUI)
 
-The dashboard comes in two forms — both built from the **real scan**, sharing one
+The dashboard comes in two forms - both built from the **real scan**, sharing one
 template, so they look identical:
 
-**1. Interactive GUI — `policyguard serve`.** A local web server: import or paste
+**1. Interactive GUI - `policyguard serve`.** A local web server: import or paste
 Terraform/OpenTofu in the browser and scan it live.
 
 ```bash
@@ -227,12 +227,12 @@ Drag a `.tf` / `.tofu` / `.tf.json` file onto the page (or paste HCL) and press
 **Scan**. The server runs the **identical pipeline** the CLI uses, in-process; it
 only ever loads the **trusted built-in policies** (a request can't point it at an
 arbitrary policy dir); and it writes uploads to a temp dir that's **deleted after
-each scan**. It binds to localhost by default — `--public` is a hardened,
+each scan**. It binds to localhost by default - `--public` is a hardened,
 upload-only mode for container hosting. See
 [Deploying the GUI](docs/DEPLOY.md) and [SECURITY.md](docs/SECURITY.md#hosting-the-gui).
 
-**2. Static report — `--format html`.** One self-contained HTML file (no server,
-no external dependencies — opens offline, safe as a CI artifact):
+**2. Static report - `--format html`.** One self-contained HTML file (no server,
+no external dependencies - opens offline, safe as a CI artifact):
 
 ```bash
 policyguard scan ./infra --format html -o report.html
@@ -278,8 +278,8 @@ policyguard scan main.tf --suppress suppression_config.json
 ### Suppressions
 
 Sometimes a finding is a deliberate, reviewed exception (a public static-site
-bucket, logging handled centrally). Rather than deleting the policy — which
-loses the signal for every other resource — acknowledge it with a suppression
+bucket, logging handled centrally). Rather than deleting the policy - which
+loses the signal for every other resource - acknowledge it with a suppression
 config. Suppressed findings are removed from the violations list and `--fail-on-error`
 exit code, but **summarized and counted** so they stay visible, and ranked by
 policy so a high suppression count flags a noisy policy worth tuning.
@@ -299,11 +299,11 @@ policy so a high suppression count flags a noisy policy worth tuning.
 ```
 
 Every rule **must** carry a `reason` (an unjustified suppression is rejected at
-load). `expires` (YYYY-MM-DD) is optional — once past, the suppression lapses and
+load). `expires` (YYYY-MM-DD) is optional - once past, the suppression lapses and
 the finding resurfaces for review, so exceptions can't silently live forever.
 
 > ⚠️ **`resource` scope.** Omitting `resource` suppresses the policy for **every
-> resource — current and future**, not just the ones you have today. Prefer a
+> resource - current and future**, not just the ones you have today. Prefer a
 > resource-specific rule (`"resource": "aws_s3_bucket.name"`) for a single
 > accepted exception; use a policy-wide rule only for a genuine
 > organization-wide control (e.g. "logging handled centrally"). A policy-wide
@@ -321,7 +321,7 @@ policyguard serve [flags]
 
 **Flags:**
 - `--addr`: address to listen on (default `127.0.0.1:8080`)
-- `--public`: hardened public mode — upload/paste only, stricter size and rate
+- `--public`: hardened public mode - upload/paste only, stricter size and rate
   limits, no filesystem path scanning (for container hosting)
 
 **Examples:**
@@ -395,7 +395,7 @@ policyguard policy show ec2_instance_security --format raw
 ## How PolicyGuard compares
 
 PolicyGuard wins on transparency, a published accuracy number, and standards
-fidelity — not on raw breadth. Here's the honest picture:
+fidelity - not on raw breadth. Here's the honest picture:
 
 | | PolicyGuard | Checkov | Trivy / tfsec | Terrascan |
 |---|---|---|---|---|
@@ -411,7 +411,7 @@ fidelity — not on raw breadth. Here's the honest picture:
 
 <sub>¹ All are well-tested, but none publishes a reproducible precision/recall
 number on a committed labeled corpus the way PolicyGuard does in
-[`benchmarks/`](benchmarks/README.md) — a transparency claim, not a claim to
+[`benchmarks/`](benchmarks/README.md) - a transparency claim, not a claim to
 detect more. ² Checks exist, but the matching logic isn't always surfaced
 per-finding at scan time.</sub>
 
@@ -421,7 +421,7 @@ Trivy** when you need the broadest multi-cloud/multi-IaC coverage.
 
 ## Security Policies
 
-PolicyGuard ships built-in policies for AWS (deep) and Azure (growing) — all in
+PolicyGuard ships built-in policies for AWS (deep) and Azure (growing) - all in
 [`policies/`](policies/) as readable Rego.
 
 ### AWS S3 Policies
@@ -469,7 +469,7 @@ handle attribute renames across azurerm provider versions.
 - **azure_storage_https_only**: Storage accounts must require HTTPS (handles both `https_traffic_only_enabled` and the older `enable_https_traffic_only`)
 - **azure_storage_min_tls**: Storage accounts must require TLS 1.2+
 - **azure_storage_public_access**: Prevent public blob/container access
-- **azure_nsg_admin_ports**: Block SSH (22) / RDP (3389) from the internet — inline `security_rule` blocks and standalone `azurerm_network_security_rule`
+- **azure_nsg_admin_ports**: Block SSH (22) / RDP (3389) from the internet - inline `security_rule` blocks and standalone `azurerm_network_security_rule`
 - **azure_sql_public_access**: SQL servers should not allow public network access
 - **azure_sql_min_tls**: SQL servers must require TLS 1.2+
 
@@ -564,7 +564,7 @@ For more details, see [Policy Severity Configuration](docs/SEVERITY_CONFIG.md).
 PolicyGuard ships ready-to-use integrations for GitHub Actions, GitLab CI, and
 Jenkins (under [`ci/`](ci/)). All three **fail closed**: the gating scan runs with
 `--fail-on-error`, so a build fails on violations (exit 1) and also on a scan that
-could not run (exit 2) — a broken scan never reports a false "clean."
+could not run (exit 2) - a broken scan never reports a false "clean."
 
 A few things to know when adopting them:
 
@@ -574,7 +574,7 @@ A few things to know when adopting them:
   blocking gate.
 - **Scan artifacts can contain scanned configuration values.** The GitLab and
   Jenkins jobs archive the full human report (and Jenkins can email it). On a
-  public or broadly-readable project, treat those artifacts as sensitive — a
+  public or broadly-readable project, treat those artifacts as sensitive - a
   report can echo a value a policy flagged (e.g. a hardcoded credential in a
   `.tf`). The GitHub Action deliberately posts only counts to the PR comment and
   keeps detail in the access-controlled Security tab (SARIF).
@@ -640,7 +640,7 @@ The hook scans the changed `.tf`/`.tofu` files and **fails closed**: it runs wit
 and a scan that cannot run (bad input / unreadable policy) also blocks the commit
 (exit 2) rather than silently passing.
 
-If you prefer a locally-installed binary, the `repo: local` form works too — just
+If you prefer a locally-installed binary, the `repo: local` form works too - just
 keep `--fail-on-error` so the hook blocks on findings:
 
 ```yaml
@@ -770,9 +770,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Additional Resources
 
-- [Deploying the GUI](docs/DEPLOY.md) — Docker + fly.io (with a custom domain)
-- [Security model](docs/SECURITY.md) — engine sandbox, GUI hosting, supply chain
-- [Architecture Decision Records](docs/adr/) — why OPA/Rego, HCL parsing, the sandbox, …
+- [Deploying the GUI](docs/DEPLOY.md) - Docker + fly.io (with a custom domain)
+- [Security model](docs/SECURITY.md) - engine sandbox, GUI hosting, supply chain
+- [Architecture Decision Records](docs/adr/) - why OPA/Rego, HCL parsing, the sandbox, …
 - [Policy Writing Guide](docs/POLICY_GUIDE.md) · [Severity Config](docs/SEVERITY_CONFIG.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md) · [API](docs/API.md)
 - [Benchmark corpus & methodology](benchmarks/README.md)
