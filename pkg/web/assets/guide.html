@@ -1,0 +1,208 @@
+{{ define "guide.html" }}<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolicyGuard — Guide</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="stylesheet" href="/assets/dashboard.css">
+<style>{{ .CSS }}</style>
+<style>
+  .guide { display: grid; grid-template-columns: 200px 1fr; gap: 32px; margin-top: 8px; }
+  @media (max-width: 860px) { .guide { grid-template-columns: 1fr; } .toc { position: static !important; } }
+  .toc { position: sticky; top: 16px; align-self: start; display: flex; flex-direction: column; gap: 4px; }
+  .toc a { color: var(--text-dim); text-decoration: none; font-size: 12.5px; padding: 4px 0; border-left: 1px solid transparent; padding-left: 10px; }
+  .toc a:hover { color: var(--text); border-left-color: var(--accent); }
+  .toc .toc-eyebrow { margin-bottom: 6px; }
+  .gsec { margin-bottom: 30px; scroll-margin-top: 16px; }
+  .gsec h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .gsec .lead { color: var(--text-dim); font-size: 12.5px; margin: 0 0 14px; }
+  .gsec p { font-size: 13px; line-height: 1.6; color: var(--text); }
+  .gsec li { font-size: 13px; line-height: 1.6; }
+  .gcard { background: var(--bg); border: 1px solid var(--border); padding: 16px 18px; margin-bottom: 12px; }
+  .gcard h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  .gcard p, .gcard ul { margin: 0; color: var(--text-dim); font-size: 12.5px; line-height: 1.55; }
+  .cmd { background: var(--surface-2); border: 1px solid var(--border); padding: 10px 12px; font-size: 12.5px;
+    color: var(--text); overflow-x: auto; white-space: pre; margin: 8px 0; }
+  .cmd .c { color: var(--text-dim); }
+  .cmd .a { color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+  .sev-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .sev-chip { font-size: 11px; padding: 3px 9px; border: 1px solid currentColor; }
+  .tags-inline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .tag { font-size: 10.5px; color: var(--text-dim); border: 1px solid var(--border); padding: 3px 7px; background: var(--surface-2); }
+  a.inline { color: var(--accent); text-decoration: none; }
+  a.inline:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 100 104" width="22" height="23" fill="none" aria-label="PolicyGuard">
+        <path d="M50 6 L88 20 V54 C88 80 50 98 50 98 C50 98 12 80 12 54 V20 Z" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+        <path d="M37 42 L49 52 L37 62" stroke="#C2F24A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M55 62 H69" stroke="#C2F24A" stroke-width="6" stroke-linecap="round"/>
+      </svg>
+      <div class="brand-text">
+        <span class="wordmark">PolicyGuard</span>
+        <span class="eyebrow">GUIDE{{ if .Public }} · PUBLIC{{ end }}</span>
+      </div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="actions">
+      <a class="btn" href="https://github.com/ToluGIT/policyguard">GitHub</a>
+      <a class="btn btn-primary" href="/">Open the scanner</a>
+    </div>
+  </header>
+
+  <main class="guide">
+    <nav class="toc">
+      <span class="eyebrow toc-eyebrow">ON THIS PAGE</span>
+      <a href="#what">What it does</a>
+      <a href="#scans">What it scans</a>
+      <a href="#detects">What it detects</a>
+      <a href="#severity">Severity &amp; status</a>
+      <a href="#using">Using the GUI</a>
+      <a href="#safety">Safety model</a>
+      <a href="#cli">CLI &amp; CI</a>
+      <a href="#formats">Output formats</a>
+    </nav>
+
+    <div class="guide-main">
+      <section class="gsec" id="what">
+        <h2>What PolicyGuard does</h2>
+        <p class="lead">A transparent, measured IaC misconfiguration scanner.</p>
+        <p>PolicyGuard analyzes Terraform and OpenTofu and evaluates each resource against
+        security policies written in <strong>Rego</strong> (Open Policy Agent). Every finding
+        traces to a policy you can open and read, carries a concrete remediation, and maps to a
+        standard weakness (CWE). On its committed benchmark corpus the core policy set measures
+        <strong>precision 1.00 / recall 0.95 (F1 0.98)</strong> — a reproducible number, not a claim.</p>
+        <p>This page is the GUI. Paste or upload configuration on the
+        <a class="inline" href="/">scanner</a> and the findings render as an interactive dashboard.</p>
+      </section>
+
+      <section class="gsec" id="scans">
+        <h2>What it scans</h2>
+        <div class="grid2">
+          <div class="gcard">
+            <h3>Formats</h3>
+            <ul>
+              <li>Terraform — <code>.tf</code>, <code>.tf.json</code></li>
+              <li>OpenTofu — <code>.tofu</code></li>
+              <li>Raw HCL — <code>.hcl</code> or pasted</li>
+            </ul>
+          </div>
+          <div class="gcard">
+            <h3>Clouds</h3>
+            <ul>
+              <li><strong>AWS</strong> — deep coverage (S3, EC2/EBS, IAM, RDS, KMS, SQS, SNS, DynamoDB, Lambda, …)</li>
+              <li><strong>Azure</strong> — storage accounts, network security groups, SQL servers</li>
+            </ul>
+          </div>
+        </div>
+        <p>The HCL parser resolves variables, <code>${...}</code> interpolation, and module inputs
+        heuristically — so it sees through common indirection without needing a <code>terraform plan</code>,
+        credentials, or network access.</p>
+      </section>
+
+      <section class="gsec" id="detects">
+        <h2>What it detects</h2>
+        <p>Misconfigurations a security reviewer would flag — public exposure, missing encryption,
+        over-broad access, disabled logging, weak transport, and more. A few examples:</p>
+        <div class="gcard">
+          <ul>
+            <li>S3 buckets that are public, unencrypted, or have logging disabled (including the modern split-resource pattern)</li>
+            <li>Security groups opening SSH/RDP to <code>0.0.0.0/0</code></li>
+            <li>EC2 without IMDSv2; unencrypted EBS volumes</li>
+            <li>IAM policies with wildcard actions/resources</li>
+            <li>RDS that is public, unencrypted, or without backups</li>
+            <li>Azure storage without HTTPS-only / minimum TLS; NSGs exposing admin ports; SQL with public access</li>
+          </ul>
+        </div>
+        <p>Each finding includes the offending source line as <strong>evidence</strong>, a CWE mapping,
+        and a diff-style <strong>remediation</strong>.</p>
+      </section>
+
+      <section class="gsec" id="severity">
+        <h2>Severity &amp; status</h2>
+        <p>Color is earned by severity, never decorative. Failing findings use a diagonal-hatch
+        treatment; passing checks are solid.</p>
+        <div class="sev-row">
+          <span class="sev-chip" style="color:var(--sev-critical)">CRITICAL</span>
+          <span class="sev-chip" style="color:var(--sev-high)">HIGH</span>
+          <span class="sev-chip" style="color:var(--sev-medium)">MEDIUM</span>
+          <span class="sev-chip" style="color:var(--sev-low)">LOW</span>
+          <span class="sev-chip" style="color:var(--pass)">PASS</span>
+        </div>
+        <p>Severities are tunable per policy via a JSON config on the CLI (<code>--severity-config</code>),
+        so you can align them with your organization's risk model.</p>
+      </section>
+
+      <section class="gsec" id="using">
+        <h2>Using the GUI</h2>
+        <div class="gcard"><h3>1. Import</h3><p>Drag <code>.tf</code>/<code>.tofu</code>/<code>.tf.json</code> files onto the upload zone (or click to choose), or paste HCL into the box. Select several files to scan them together — cross-resource policies can then see related resources.</p></div>
+        <div class="gcard"><h3>2. Scan</h3><p>Press <strong>Scan</strong>. The configuration is analyzed on the machine running this server; the dashboard renders below.</p></div>
+        <div class="gcard"><h3>3. Explore</h3><p>Filter by severity, search by resource/policy/file, and click any finding to see its evidence and remediation. Press <code>/</code> to jump to search.</p></div>
+      </section>
+
+      <section class="gsec" id="safety">
+        <h2>Safety model</h2>
+        <p>PolicyGuard parses untrusted IaC, so the server treats its own attack surface as first-class.</p>
+        <div class="grid2">
+          <div class="gcard">
+            <h3>Local mode (default)</h3>
+            <p>Binds to <code>127.0.0.1</code> — reachable only from your machine. Generous limits. Run with <code>policyguard serve</code>.</p>
+          </div>
+          <div class="gcard">
+            <h3>Public mode</h3>
+            <p>Upload/paste only — no filesystem path scanning, module sources confined to the upload, tighter size/rate limits. Run with <code>policyguard serve --public</code>. This hosted instance{{ if .Public }} is in public mode.{{ else }} runs in local mode.{{ end }}</p>
+          </div>
+        </div>
+        <p>Uploaded content is written to a temporary directory and <strong>deleted after each scan</strong>;
+        only PolicyGuard's trusted built-in policies are loaded; all rendered content is escaped.
+        Full threat model: <a class="inline" href="https://github.com/ToluGIT/policyguard/blob/main/docs/SECURITY.md">docs/SECURITY.md</a>.</p>
+      </section>
+
+      <section class="gsec" id="cli">
+        <h2>CLI &amp; CI</h2>
+        <p>The GUI is one front-end; the same engine runs in your terminal and pipelines.</p>
+        <div class="cmd"><span class="c"># scan a directory</span>
+policyguard scan ./infra
+
+<span class="c"># fail a CI build on violations (exit 1 = violations, 2 = scan error)</span>
+policyguard scan ./infra <span class="a">--fail-on-error</span>
+
+<span class="c"># start this GUI</span>
+policyguard serve</div>
+        <p>Drop-in integrations exist for GitHub Actions, GitLab CI, Jenkins, and pre-commit. See the
+        <a class="inline" href="https://github.com/ToluGIT/policyguard">repository</a>.</p>
+      </section>
+
+      <section class="gsec" id="formats">
+        <h2>Output formats</h2>
+        <p>Beyond this dashboard, the CLI emits:</p>
+        <div class="tags-inline">
+          <span class="tag">human</span>
+          <span class="tag">json</span>
+          <span class="tag">junit</span>
+          <span class="tag">sarif (CWE + fingerprints)</span>
+          <span class="tag">compliance CSV</span>
+          <span class="tag">html (this dashboard, static)</span>
+        </div>
+        <p style="margin-top:12px">SARIF loads in GitHub code scanning; the HTML report is a single self-contained
+        file you can attach as a CI artifact.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <span>PolicyGuard v{{ .Version }} · guide</span>
+    <span class="foot-dim"><a class="inline" href="/">← back to the scanner</a></span>
+  </footer>
+</div>
+</body>
+</html>{{ end }}

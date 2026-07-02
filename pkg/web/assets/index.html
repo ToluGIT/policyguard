@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolicyGuard — Scan</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<!-- Reuse the dashboard stylesheet (served by the server) plus a few GUI-only rules. -->
+<link rel="stylesheet" href="/assets/dashboard.css">
+<style>{{ .CSS }}</style>
+<style>
+  /* GUI-only additions, in the same terminal-mono language. */
+  .gui-main { margin-top: 4px; }
+  .uploader { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; margin-bottom: 18px; }
+  @media (max-width: 1024px) { .uploader { grid-template-columns: 1fr; } }
+  .dropzone {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; text-align: center; padding: 30px 18px; min-height: 190px;
+    border: 1px dashed var(--border); background: var(--bg); cursor: pointer;
+    transition: border-color .18s ease, background .18s ease;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: rgba(194,242,74,.04); }
+  .dropzone .ico-lg { color: var(--text-dim); }
+  .dz-title { font-size: 13px; color: var(--text); }
+  .dz-sub { font-size: 11px; color: var(--text-dim); }
+  .dz-types { font-size: 10.5px; color: var(--text-dim); letter-spacing: .04em; }
+  .paste-wrap { display: flex; flex-direction: column; }
+  .paste-wrap textarea {
+    flex: 1; min-height: 150px; resize: vertical; background: var(--surface-2);
+    border: 1px solid var(--border); color: var(--text); font-family: var(--mono);
+    font-size: 12.5px; padding: 10px 12px; line-height: 1.5; outline: none;
+  }
+  .paste-wrap textarea:focus { border-color: var(--text-dim); }
+  .uploader .card-title { margin-bottom: 10px; }
+  .filelist { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; min-height: 0; }
+  .filechip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px;
+    color: var(--text-dim); border: 1px solid var(--border); padding: 3px 8px; background: var(--surface-2); }
+  .filechip .x { cursor: pointer; color: var(--text-dim); }
+  .filechip .x:hover { color: var(--sev-critical); }
+  .run-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 20px; }
+  .run-row .hint { font-size: 11px; color: var(--text-dim); }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  #results:empty { display: none; }
+  .gui-status { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
+  .gui-error { color: var(--sev-critical); border: 1px solid var(--sev-critical);
+    background: repeating-linear-gradient(45deg, rgba(244,96,77,.08) 0 2px, transparent 2px 6px);
+    padding: 10px 12px; font-size: 12.5px; margin-bottom: 16px; }
+  .spinner { width: 13px; height: 13px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50% !important; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .placeholder { color: var(--text-dim); font-size: 13px; padding: 40px 6px; text-align: center; border: 1px dashed var(--border); }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 100 104" width="22" height="23" fill="none" aria-label="PolicyGuard">
+        <path d="M50 6 L88 20 V54 C88 80 50 98 50 98 C50 98 12 80 12 54 V20 Z" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+        <path d="M37 42 L49 52 L37 62" stroke="#C2F24A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M55 62 H69" stroke="#C2F24A" stroke-width="6" stroke-linecap="round"/>
+      </svg>
+      <div class="brand-text">
+        <span class="wordmark">PolicyGuard</span>
+        <span class="eyebrow">IAC SECURITY · OPA{{ if .Public }} · PUBLIC{{ end }}</span>
+      </div>
+    </div>
+    <div class="search">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" type="text" placeholder="Scan something first to filter findings…" autocomplete="off" spellcheck="false" disabled>
+      <span class="kbd">/</span>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/guide">Guide</a>
+      <button class="btn btn-primary" id="run-btn" type="button" disabled>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        Scan
+      </button>
+    </div>
+  </header>
+
+  <main class="gui-main">
+    <div id="error" class="gui-error" hidden></div>
+
+    <section class="uploader">
+      <!-- drop / choose files -->
+      <div class="card">
+        <div class="card-title"><span class="eyebrow">IMPORT</span><h2>Upload Terraform / OpenTofu</h2></div>
+        <label class="dropzone" id="dropzone" for="file-input">
+          <svg class="ico ico-lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+          <span class="dz-title">Drop files here or click to choose</span>
+          <span class="dz-sub">Scanned locally by this PolicyGuard server — files are deleted after the scan. Covers AWS &amp; Azure resources.</span>
+          <span class="dz-types">.tf · .tofu · .tf.json · .hcl · up to {{ .MaxFile }} files / {{ .MaxMB }} MB</span>
+        </label>
+        <input id="file-input" type="file" multiple accept=".tf,.tofu,.json,.hcl" hidden>
+        <div class="filelist" id="filelist"></div>
+      </div>
+
+      <!-- paste -->
+      <div class="card paste-wrap">
+        <div class="card-title"><span class="eyebrow">OR PASTE</span><h2>Terraform / OpenTofu HCL</h2></div>
+        <textarea id="paste" placeholder='resource "aws_s3_bucket" "example" {&#10;  bucket = "my-bucket"&#10;  acl    = "public-read"&#10;}' spellcheck="false"></textarea>
+      </div>
+    </section>
+
+    <div class="run-row">
+      <span class="gui-status" id="status">Add a file or paste configuration, then Scan.</span>
+    </div>
+
+    <div id="results">
+      <div class="placeholder" id="placeholder">No scan yet. Import or paste Terraform/OpenTofu and press Scan to see findings.</div>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <span>PolicyGuard v{{ .Version }} · local scan server</span>
+    <span class="foot-dim">{{ if .Public }}Public mode — upload/paste only.{{ else }}Findings are computed on this machine; nothing leaves it.{{ end }}</span>
+  </footer>
+</div>
+
+<!-- dashboard.js binds the filter/search/"/" handlers (delegated from document)
+     up front, so they work the moment the first results fragment is injected.
+     gui.js drives upload/paste/scan and calls window.initDashboard() per scan. -->
+<script src="/assets/dashboard.js"></script>
+<script src="/assets/gui.js"></script>
+</body>
+</html>
