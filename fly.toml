@@ -1,0 +1,27 @@
+# Fly.io deploy config for the PolicyGuard public GUI.
+#
+#   fly launch --no-deploy        # first time: create the app (skip the wizard's own toml)
+#   fly deploy                    # build Dockerfile.gui and ship
+#
+# The GUI runs in hardened public mode (upload/paste only, no filesystem path
+# scanning, confined module sources, tight limits), so it is safe to expose.
+# Change `app` to your Fly app name.
+app = "policyguard"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile.gui"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  # Scans are capped (public mode: 1 MiB / 25 files / 15 s), so a small shared
+  # machine is plenty.
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

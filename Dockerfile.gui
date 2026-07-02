@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1
+#
+# PolicyGuard GUI image — runs the web dashboard in hardened PUBLIC mode, safe to
+# host on the open internet (e.g. fly.io).
+#   docker build -f Dockerfile.gui -t policyguard-gui .
+#   docker run -p 8080:8080 policyguard-gui
+#
+# Public mode is upload/paste only (no filesystem path scanning), with module
+# sources confined to the upload, tight size/file/rate limits, and only the
+# trusted embedded policy set. Runs as a non-root user on a distroless base.
+
+# ---- build stage ------------------------------------------------------------
+FROM golang:1.21-alpine AS build
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Policies and GUI assets are compiled into the binary via //go:embed, so the
+# final image needs nothing on disk but the binary.
+COPY . .
+
+ARG VERSION=0.3.1
+ARG COMMIT=docker
+ARG DATE=unknown
+
+RUN CGO_ENABLED=0 GOOS=linux go build \
+        -trimpath \
+        -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+        -o /out/policyguard \
+        ./cmd/policyguard
+
+# ---- final stage ------------------------------------------------------------
+FROM gcr.io/distroless/static-debian12:nonroot
+
+LABEL org.opencontainers.image.title="PolicyGuard GUI" \
+      org.opencontainers.image.description="PolicyGuard web dashboard (public mode) — scan Terraform/OpenTofu in the browser" \
+      org.opencontainers.image.source="https://github.com/ToluGIT/policyguard" \
+      org.opencontainers.image.licenses="MIT"
+
+COPY --from=build /out/policyguard /usr/local/bin/policyguard
+
+USER nonroot:nonroot
+
+# Public mode binds 0.0.0.0 so the host/platform can map the port; the platform
+# (fly.io) terminates TLS in front of it.
+EXPOSE 8080
+
+ENTRYPOINT ["policyguard"]
+CMD ["serve", "--public", "--addr", "0.0.0.0:8080"]

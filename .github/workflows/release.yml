@@ -8,9 +8,10 @@ on:
 
 permissions:
   contents: write  # Required for creating releases
-  packages: write  # Required for publishing to GitHub Packages
+  packages: write  # Required for publishing the container image to GHCR
   issues: write    # Required for release notes
   pull-requests: write
+  id-token: write  # Required for cosign keyless (OIDC) signing — no private key stored
 
 jobs:
   build-and-test:
@@ -85,7 +86,28 @@ jobs:
         cd build
         sha256sum * > checksums.txt
         cd ..
-    
+
+    - name: Install cosign
+      uses: sigstore/cosign-installer@v3
+
+    - name: Install syft (SBOM generator)
+      uses: anchore/sbom-action/download-syft@v0
+
+    - name: Sign checksums and generate SBOM
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        # Keyless signing of the checksums file. The signature + certificate are
+        # bound to this workflow's OIDC identity (no long-lived private key);
+        # verifying the checksums verifies every binary listed in it.
+        cosign sign-blob --yes \
+          --output-signature build/checksums.txt.sig \
+          --output-certificate build/checksums.txt.pem \
+          build/checksums.txt
+
+        # SBOM for the release in SPDX JSON — lets consumers see exactly what
+        # went into the binaries (the Go module graph).
+        syft scan dir:. -o spdx-json=build/policyguard.sbom.spdx.json
+
     - name: Self-test with built binary
       run: |
         # Test the Linux binary on our examples
@@ -113,6 +135,66 @@ jobs:
         path: |
           coverage.out
           coverage.html
+
+  publish-container:
+    name: Build, Push & Sign Container Image
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Derive image metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        # Lowercased automatically by the action; repo may contain uppercase.
+        images: ghcr.io/${{ github.repository }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable=${{ !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'rc') }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push image (multi-arch)
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          VERSION=${{ github.ref_name }}
+          COMMIT=${{ github.sha }}
+        provenance: true
+        sbom: true
+
+    - name: Install cosign
+      uses: sigstore/cosign-installer@v3
+
+    - name: Sign the pushed image (keyless)
+      env:
+        DIGEST: ${{ steps.build.outputs.digest }}
+      run: |
+        # Sign by immutable digest, not by tag, so the signature cannot be
+        # re-pointed at a different image later. Keyless via the workflow's
+        # OIDC identity — no private key to manage or leak.
+        cosign sign --yes "ghcr.io/${GITHUB_REPOSITORY,,}@${DIGEST}"
 
   publish-github-packages:
     name: Publish to GitHub Packages
@@ -232,6 +314,9 @@ jobs:
           build/policyguard-darwin-arm64
           build/policyguard-windows-amd64.exe
           build/checksums.txt
+          build/checksums.txt.sig
+          build/checksums.txt.pem
+          build/policyguard.sbom.spdx.json
         draft: false
         prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
         generate_release_notes: true

@@ -29,30 +29,38 @@ variables:
   script:
     - |
       echo "Running PolicyGuard security scan..."
-      
-      # Run scan and generate multiple report formats
+
+      # Gating run: --fail-on-error makes the exit code reflect findings.
+      # Exit codes: 0 = clean, 1 = violations, 2 = scan error. Without the flag
+      # the scan exits 0 even with violations, which makes the gate fail OPEN.
       set +e
-      policyguard scan ${POLICYGUARD_TARGET} \
-        -p ${POLICYGUARD_POLICY_PATH} \
-        -f sarif -o gl-sast-report.json
+      policyguard scan "${POLICYGUARD_TARGET}" \
+        -p "${POLICYGUARD_POLICY_PATH}" \
+        -f sarif -o gl-sast-report.json --fail-on-error
       SCAN_EXIT_CODE=$?
       set -e
-      
-      # Generate human-readable report
-      policyguard scan ${POLICYGUARD_TARGET} \
-        -p ${POLICYGUARD_POLICY_PATH} \
-        -o policyguard-report.txt
-      
-      # Generate JUnit report for GitLab test reporting
-      policyguard scan ${POLICYGUARD_TARGET} \
-        -p ${POLICYGUARD_POLICY_PATH} \
-        -f junit -o policyguard-junit.xml
-      
+
+      # A scan that could not run (exit 2) always fails the job: a broken scan
+      # is not a passing scan, regardless of POLICYGUARD_FAIL_ON_ERROR.
+      if [ $SCAN_EXIT_CODE -eq 2 ]; then
+        echo "PolicyGuard failed to run (exit 2). Check target path and policies."
+        exit 2
+      fi
+
+      # Informational reports (not gated).
+      policyguard scan "${POLICYGUARD_TARGET}" \
+        -p "${POLICYGUARD_POLICY_PATH}" \
+        -o policyguard-report.txt || true
+
+      policyguard scan "${POLICYGUARD_TARGET}" \
+        -p "${POLICYGUARD_POLICY_PATH}" \
+        -f junit -o policyguard-junit.xml || true
+
       # Display summary in job log
       echo "=== PolicyGuard Scan Summary ==="
       grep -A 10 "SUMMARY" policyguard-report.txt || true
-      
-      # Fail job if violations found and fail-on-error is true
+
+      # Fail job if violations found and fail-on-error is true.
       if [ "$POLICYGUARD_FAIL_ON_ERROR" = "true" ] && [ $SCAN_EXIT_CODE -ne 0 ]; then
         echo "Security violations found!"
         exit 1

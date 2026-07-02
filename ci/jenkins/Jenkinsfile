@@ -58,38 +58,44 @@ pipeline {
                     sh '''
                         export PATH=$PATH:$HOME/go/bin
                         echo "Running PolicyGuard security scan..."
-                        
-                        # Run scan with SARIF output
+
+                        # Gating run: --fail-on-error makes the exit code reflect
+                        # findings. 0 = clean, 1 = violations, 2 = scan error.
+                        # Without the flag the scan exits 0 even with violations,
+                        # which makes the gate fail OPEN.
                         set +e
-                        policyguard scan ${POLICYGUARD_TARGET} \
-                            -p ${POLICYGUARD_POLICY_PATH} \
-                            -f sarif -o policyguard-sarif.json
+                        policyguard scan "${POLICYGUARD_TARGET}" \
+                            -p "${POLICYGUARD_POLICY_PATH}" \
+                            -f sarif -o policyguard-sarif.json --fail-on-error
                         SCAN_EXIT_CODE=$?
                         set -e
-                        
-                        # Generate human-readable report
-                        policyguard scan ${POLICYGUARD_TARGET} \
-                            -p ${POLICYGUARD_POLICY_PATH} \
-                            -o policyguard-report.txt
-                        
-                        # Generate JUnit report
-                        policyguard scan ${POLICYGUARD_TARGET} \
-                            -p ${POLICYGUARD_POLICY_PATH} \
-                            -f junit -o policyguard-junit.xml
-                        
+
+                        # Informational reports (not gated).
+                        policyguard scan "${POLICYGUARD_TARGET}" \
+                            -p "${POLICYGUARD_POLICY_PATH}" \
+                            -o policyguard-report.txt || true
+
+                        policyguard scan "${POLICYGUARD_TARGET}" \
+                            -p "${POLICYGUARD_POLICY_PATH}" \
+                            -f junit -o policyguard-junit.xml || true
+
                         # Display summary
                         echo "=== PolicyGuard Scan Summary ==="
                         cat policyguard-report.txt | grep -A 10 "SUMMARY" || true
-                        
+
                         # Save exit code
                         echo $SCAN_EXIT_CODE > scan_exit_code.txt
                     '''
                     
-                    // Check if scan failed
+                    // Interpret the exit code. 2 = the scan could not run, which
+                    // always fails the build (a broken scan is not a pass). 1 =
+                    // violations found, gated by POLICYGUARD_FAIL_ON_ERROR.
                     def exitCode = sh(script: 'cat scan_exit_code.txt', returnStdout: true).trim()
-                    if (exitCode != '0') {
+                    if (exitCode == '2') {
+                        error("PolicyGuard failed to run (exit 2). Check target path and policies.")
+                    } else if (exitCode != '0') {
                         scanFailed = true
-                        
+
                         if (env.POLICYGUARD_FAIL_ON_ERROR == 'true') {
                             error("PolicyGuard found security violations!")
                         } else {

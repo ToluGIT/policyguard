@@ -1,0 +1,28 @@
+# PolicyGuard pre-commit hook definitions.
+#
+# Consume from another repository's .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/ToluGIT/policyguard
+#       rev: v0.3.1
+#       hooks:
+#         - id: policyguard
+#
+# The hook fails closed: it runs with --fail-on-error, so a commit touching a
+# .tf/.tofu file that introduces a violation is blocked (exit 1), and a scan that
+# cannot run (bad input / unreadable policy) also blocks the commit (exit 2),
+# rather than silently passing.
+# `language: golang` makes pre-commit run `go install ./...` for this repo, which
+# builds the main package at ./cmd/policyguard into the hook environment, then
+# invokes `entry`. `entry` is the bare binary name; the subcommand and flags go in
+# `args`. pass_filenames appends the changed .tf/.tofu files as additional args
+# (the scan command accepts multiple paths). pre-commit only runs the hook when at
+# least one file matches `files`, so the command always receives ≥1 path.
+- id: policyguard
+  name: PolicyGuard IaC security scan
+  description: Scan changed Terraform/OpenTofu files for security policy violations
+  entry: policyguard
+  args: ["scan", "--fail-on-error"]
+  language: golang
+  files: \.(tf|tofu)(\.json)?$
+  pass_filenames: true

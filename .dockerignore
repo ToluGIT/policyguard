@@ -1,0 +1,42 @@
+# Keep the build context small and deterministic. The build only needs Go
+# source, go.mod/go.sum, and the embedded policies/ tree.
+#
+# DO NOT add policies/ here. It is compiled into the binary via
+# `//go:embed all:policies` (policies.go); excluding it from the build context
+# would make go:embed see an empty tree and silently ship a policy-less binary.
+
+# Build outputs and local binaries
+/bin/
+/dist/
+/build/
+/policyguard
+/policyguard-*
+*.exe
+*.test
+
+# VCS and CI/editor metadata (not needed to compile)
+.git/
+.github/
+.gitignore
+.golangci.yml
+.air.toml
+
+# Docs, examples, and assets — none are compiled into the binary
+docs/
+examples/
+benchmarks/
+tests/
+*.md
+assets/
+scripts/
+
+# Claude / tooling scratch
+.claude/
+.tmp/
+*.log
+.DS_Store
+
+# Coverage / scan outputs
+coverage.*
+*.sarif
+results.*

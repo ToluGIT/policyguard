@@ -52,7 +52,12 @@ jobs:
       shell: bash
       run: |
         go test -v $(go list ./... | grep -v /examples)
-    
+
+    - name: Detection benchmark (precision/recall gate)
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
+      run: |
+        go run ./benchmarks/cmd/benchrunner -min-precision 0.80 -min-recall 0.88
+
     - name: Generate coverage report
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
       run: |

@@ -1,10 +1,10 @@
-.PHONY: build test clean install lint integration-test test-all
+.PHONY: build test clean install lint integration-test test-all benchmark
 
 # Variables
 BINARY_NAME=policyguard
 BINARY_PATH=./bin/$(BINARY_NAME)
 MAIN_PATH=./cmd/policyguard
-VERSION=0.3.0
+VERSION=0.3.1
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.date=$(BUILD_TIME)"
 
@@ -75,3 +75,10 @@ integration-test: build
 # Run all tests (unit + integration)
 test-all: test integration-test
 	@echo "All tests completed!"
+
+# Measure detection precision/recall against the labeled corpus.
+# Thresholds are the current committed floor; lowering them must be a
+# deliberate, reviewed change, not a silent regression.
+benchmark:
+	@echo "Running detection benchmark..."
+	@go run ./benchmarks/cmd/benchrunner -min-precision 0.80 -min-recall 0.88
